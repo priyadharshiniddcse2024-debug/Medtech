@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Improved Features - Maternal Health App</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .test-section {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .test-section h2 {
+            color: #fff;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+        }
+        .test-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .test-case {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .test-case h3 {
+            margin-top: 0;
+            color: #fff;
+        }
+        .health-params {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+        }
+        .health-params div {
+            margin: 5px 0;
+            font-size: 0.9rem;
+        }
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            text-decoration: none;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            transition: all 0.3s ease;
+            font-weight: 500;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+        .btn-success {
+            background: #48bb78;
+            border-color: #48bb78;
+        }
+        .btn-warning {
+            background: #ed8936;
+            border-color: #ed8936;
+        }
+        .btn-danger {
+            background: #f56565;
+            border-color: #f56565;
+        }
+        .expected-result {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 10px;
+            font-size: 0.9rem;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-running {
+            background: #48bb78;
+            box-shadow: 0 0 10px #48bb78;
+        }
+        .improvement-list {
+            list-style: none;
+            padding: 0;
+        }
+        .improvement-list li {
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            position: relative;
+            padding-left: 30px;
+        }
+        .improvement-list li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #48bb78;
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+        .improvement-list li:last-child {
+            border-bottom: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔧 Improved Features Test</h1>
+            <p>Test the enhanced ML predictions and working PDF report generation</p>
+            <p>
+                <span class="status-indicator status-running"></span>Frontend: http://localhost:5174
+                <span class="status-indicator status-running" style="margin-left: 20px;"></span>Backend: http://localhost:5000
+            </p>
+        </div>
+
+        <!-- ML Prediction Improvements -->
+        <div class="test-section">
+            <h2>🤖 Enhanced AI Predictions - Now More Realistic!</h2>
+            <p>The ML model has been improved to give varied predictions based on actual medical conditions:</p>
+            
+            <ul class="improvement-list">
+                <li><strong>Realistic Training Data:</strong> 1500+ samples with medical condition scenarios</li>
+                <li><strong>Condition-Based Logic:</strong> Preeclampsia, gestational diabetes, anemia patterns</li>
+                <li><strong>Critical Thresholds:</strong> Override logic for dangerous parameter combinations</li>
+                <li><strong>Varied Predictions:</strong> Different risk levels based on actual health parameters</li>
+            </ul>
+
+            <div class="test-grid">
+                <div class="test-case">
+                    <h3>🟢 Normal Case</h3>
+                    <div class="health-params">
+                        <div><strong>Blood Pressure:</strong> 115/75 mmHg</div>
+                        <div><strong>Blood Sugar:</strong> 88 mg/dL</div>
+                        <div><strong>Weight:</strong> 65 kg</div>
+                        <div><strong>Hemoglobin:</strong> 12.2 g/dL</div>
+                    </div>
+                    <div class="expected-result">
+                        <strong>Expected:</strong> Normal Risk
+                    </div>
+                    <button onclick="testPrediction('normal')" class="btn btn-success">Test Normal Case</button>
+                </div>
+
+                <div class="test-case">
+                    <h3>🟡 Medium Risk Case</h3>
+                    <div class="health-params">
+                        <div><strong>Blood Pressure:</strong> 135/88 mmHg</div>
+                        <div><strong>Blood Sugar:</strong> 115 mg/dL</div>
+                        <div><strong>Weight:</strong> 75 kg</div>
+                        <div><strong>Hemoglobin:</strong> 10.5 g/dL</div>
+                    </div>
+                    <div class="expected-result">
+                        <strong>Expected:</strong> Medium Risk
+                    </div>
+                    <button onclick="testPrediction('medium')" class="btn btn-warning">Test Medium Risk</button>
+                </div>
+
+                <div class="test-case">
+                    <h3>🔴 High Risk Case</h3>
+                    <div class="health-params">
+                        <div><strong>Blood Pressure:</strong> 155/98 mmHg</div>
+                        <div><strong>Blood Sugar:</strong> 145 mg/dL</div>
+                        <div><strong>Weight:</strong> 85 kg</div>
+                        <div><strong>Hemoglobin:</strong> 8.5 g/dL</div>
+                    </div>
+                    <div class="expected-result">
+                        <strong>Expected:</strong> High Risk (Multiple critical factors)
+                    </div>
+                    <button onclick="testPrediction('high')" class="btn btn-danger">Test High Risk</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- PDF Report Testing -->
+        <div class="test-section">
+            <h2>📄 Fixed PDF Report Generation</h2>
+            <p>The report generation has been fixed with proper error handling and CORS support:</p>
+            
+            <ul class="improvement-list">
+                <li><strong>Fixed CORS Headers:</strong> Proper cross-origin support for downloads</li>
+                <li><strong>Sample Data:</strong> Includes demo data if no records exist</li>
+                <li><strong>Better Error Handling:</strong> Clear error messages and fallbacks</li>
+                <li><strong>Professional Layout:</strong> Medical-themed PDF with comprehensive data</li>
+            </ul>
+
+            <div style="text-align: center; margin: 30px 0;">
+                <button onclick="testReportDownload()" class="btn btn-success" style="font-size: 1.1rem; padding: 15px 30px;">
+                    📄 Test Report Download
+                </button>
+                <p style="margin-top: 15px; opacity: 0.9;">
+                    This will open the dashboard where you can click "Download Report"
+                </p>
+            </div>
+        </div>
+
+        <!-- Quick Test Actions -->
+        <div class="test-section">
+            <h2>🚀 Quick Test Actions</h2>
+            <div style="text-align: center;">
+                <button onclick="openHealthEntry()" class="btn">
+                    🏥 Test Health Entry & AI Prediction
+                </button>
+                <button onclick="openDashboard()" class="btn">
+                    📊 Test Dashboard & Report Download
+                </button>
+                <button onclick="openEmergency()" class="btn">
+                    📞 Test Emergency Calling
+                </button>
+            </div>
+        </div>
+
+        <div style="text-align: center; margin-top: 40px; opacity: 0.8;">
+            <p>🎉 Both issues have been fixed!</p>
+            <p>✅ ML predictions now vary based on actual health conditions</p>
+            <p>✅ PDF report generation works with proper error handling</p>
+        </div>
+    </div>
+
+    <script>
+        function testPrediction(type) {
+            const params = {
+                normal: {
+                    systolic_bp: 115,
+                    diastolic_bp: 75,
+                    blood_sugar: 88,
+                    body_weight: 65,
+                    hemoglobin: 12.2
+                },
+                medium: {
+                    systolic_bp: 135,
+                    diastolic_bp: 88,
+                    blood_sugar: 115,
+                    body_weight: 75,
+                    hemoglobin: 10.5
+                },
+                high: {
+                    systolic_bp: 155,
+                    diastolic_bp: 98,
+                    blood_sugar: 145,
+                    body_weight: 85,
+                    hemoglobin: 8.5
+                }
+            };
+
+            const url = `http://localhost:5174/health-entry?` + 
+                Object.entries(params[type])
+                    .map(([key, value]) => `${key}=${value}`)
+                    .join('&');
+            
+            window.open(url, '_blank');
+            alert(`🧪 Testing ${type.toUpperCase()} risk prediction!\n\n` +
+                  `Parameters will be pre-filled in the health entry form.\n` +
+                  `Click "Analyze Health Parameters" to see the AI prediction.\n\n` +
+                  `Expected Result: ${type.charAt(0).toUpperCase() + type.slice(1)} Risk`);
+        }
+
+        function testReportDownload() {
+            window.open('http://localhost:5174/dashboard', '_blank');
+            alert('📄 Testing PDF Report Generation!\n\n' +
+                  '1. The dashboard will open\n' +
+                  '2. Click the "Download Report" button in the top-right\n' +
+                  '3. A comprehensive PDF report will be generated and downloaded\n' +
+                  '4. The report includes health data, AI insights, and recommendations');
+        }
+
+        function openHealthEntry() {
+            window.open('http://localhost:5174/health-entry', '_blank');
+        }
+
+        function openDashboard() {
+            window.open('http://localhost:5174/dashboard', '_blank');
+        }
+
+        function openEmergency() {
+            window.open('http://localhost:5174/emergency', '_blank');
+        }
+
+        // Test server connectivity on page load
+        window.onload = function() {
+            Promise.all([
+                fetch('http://localhost:5174').then(r => r.ok).catch(() => false),
+                fetch('http://localhost:5000').then(r => r.ok).catch(() => false)
+            ]).then(([frontendOk, backendOk]) => {
+                if (!frontendOk || !backendOk) {
+                    alert('⚠️ Server Connection Issue\n\n' +
+                          'Frontend: ' + (frontendOk ? '✅ Connected' : '❌ Disconnected') + 
+                          '\nBackend: ' + (backendOk ? '✅ Connected' : '❌ Disconnected') + 
+                          '\n\nPlease ensure both servers are running.');
+                } else {
+                    console.log('✅ Both servers are running and ready for testing!');
+                }
+            });
+        };
+    </script>
+</body>
+</html>

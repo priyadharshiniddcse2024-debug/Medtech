@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: maternal-health-api
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: "cd backend && pip install -r requirements.txt && python setup.py"
+    startCommand: "cd backend && gunicorn app:app --bind 0.0.0.0:$PORT"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.0
+      - key: SECRET_KEY
+        generateValue: true
+      - key: FLASK_ENV
+        value: production
+      - key: CORS_ORIGINS
+        value: "*"

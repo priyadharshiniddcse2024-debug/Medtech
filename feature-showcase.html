@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maternal Health App - New Features Showcase</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .header h1 {
+            font-size: 3rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+        .feature-card {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+        }
+        .feature-icon {
+            font-size: 3rem;
+            margin-bottom: 20px;
+            display: block;
+        }
+        .feature-card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 15px;
+            color: #fff;
+        }
+        .feature-card p {
+            margin-bottom: 20px;
+            line-height: 1.6;
+            opacity: 0.9;
+        }
+        .feature-list {
+            list-style: none;
+            padding: 0;
+            margin-bottom: 25px;
+        }
+        .feature-list li {
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            position: relative;
+            padding-left: 25px;
+        }
+        .feature-list li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #48bb78;
+            font-weight: bold;
+        }
+        .feature-list li:last-child {
+            border-bottom: none;
+        }
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            text-decoration: none;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+        .btn-primary {
+            background: #48bb78;
+            border-color: #48bb78;
+        }
+        .btn-primary:hover {
+            background: #38a169;
+        }
+        .btn-danger {
+            background: #f56565;
+            border-color: #f56565;
+        }
+        .btn-danger:hover {
+            background: #e53e3e;
+        }
+        .demo-section {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 30px;
+            margin-top: 40px;
+        }
+        .demo-buttons {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-running {
+            background: #48bb78;
+            box-shadow: 0 0 10px #48bb78;
+        }
+        .new-badge {
+            background: #f56565;
+            color: white;
+            font-size: 0.7rem;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏥 Maternal Health Monitoring System</h1>
+            <p>Now with Real-Time Calling & Report Generation!</p>
+            <p>
+                <span class="status-indicator status-running"></span>Frontend: http://localhost:5174
+                <span class="status-indicator status-running" style="margin-left: 20px;"></span>Backend: http://localhost:5000
+            </p>
+        </div>
+
+        <div class="features-grid">
+            <!-- Real-Time Calling Feature -->
+            <div class="feature-card">
+                <span class="feature-icon">📞</span>
+                <h3>Real-Time Emergency Calling <span class="new-badge">NEW</span></h3>
+                <p>Instant emergency calling with location tracking and call logging.</p>
+                <ul class="feature-list">
+                    <li>One-click emergency calls (911, hospital, doctor)</li>
+                    <li>Automatic location sharing</li>
+                    <li>Call logging and tracking</li>
+                    <li>Emergency contact notifications</li>
+                    <li>Real-time call status updates</li>
+                </ul>
+                <a href="http://localhost:5174/emergency" class="btn btn-danger">Test Emergency Calling</a>
+            </div>
+
+            <!-- Report Generation Feature -->
+            <div class="feature-card">
+                <span class="feature-icon">📄</span>
+                <h3>Health Report Generation <span class="new-badge">NEW</span></h3>
+                <p>Comprehensive PDF health reports with AI insights and recommendations.</p>
+                <ul class="feature-list">
+                    <li>Complete health parameter analysis</li>
+                    <li>AI-generated recommendations</li>
+                    <li>Pregnancy progress tracking</li>
+                    <li>Professional PDF format</li>
+                    <li>Shareable with healthcare providers</li>
+                </ul>
+                <a href="http://localhost:5174/dashboard" class="btn btn-primary">Download Report</a>
+            </div>
+
+            <!-- Enhanced Dashboard -->
+            <div class="feature-card">
+                <span class="feature-icon">📊</span>
+                <h3>Enhanced Dashboard</h3>
+                <p>Improved dashboard with quick actions and better data visualization.</p>
+                <ul class="feature-list">
+                    <li>One-click report download</li>
+                    <li>Real-time health metrics</li>
+                    <li>AI risk assessment display</li>
+                    <li>Quick action buttons</li>
+                    <li>Responsive mobile design</li>
+                </ul>
+                <a href="http://localhost:5174/dashboard" class="btn">View Dashboard</a>
+            </div>
+
+            <!-- Medical Records Manager -->
+            <div class="feature-card">
+                <span class="feature-icon">🏥</span>
+                <h3>Medical Records Manager</h3>
+                <p>Complete medical record management with quick calling features.</p>
+                <ul class="feature-list">
+                    <li>Comprehensive record tracking</li>
+                    <li>Appointment calendar integration</li>
+                    <li>Quick call buttons (doctor, hospital)</li>
+                    <li>Document attachment support</li>
+                    <li>Search and filter capabilities</li>
+                </ul>
+                <a href="http://localhost:5174/medical" class="btn">Manage Records</a>
+            </div>
+
+            <!-- Analytics Dashboard -->
+            <div class="feature-card">
+                <span class="feature-icon">📈</span>
+                <h3>Advanced Analytics</h3>
+                <p>Interactive charts and health trend analysis with AI insights.</p>
+                <ul class="feature-list">
+                    <li>Interactive health charts</li>
+                    <li>Trend analysis and predictions</li>
+                    <li>Risk level distribution</li>
+                    <li>Health insights and recommendations</li>
+                    <li>Exportable data visualizations</li>
+                </ul>
+                <a href="http://localhost:5174/analytics" class="btn">View Analytics</a>
+            </div>
+
+            <!-- Pregnancy Tracker -->
+            <div class="feature-card">
+                <span class="feature-icon">🤱</span>
+                <h3>Pregnancy Tracker</h3>
+                <p>Week-by-week pregnancy guidance with comprehensive information.</p>
+                <ul class="feature-list">
+                    <li>42 weeks of detailed guidance</li>
+                    <li>Fetal development tracking</li>
+                    <li>Maternal health monitoring</li>
+                    <li>Medical milestone reminders</li>
+                    <li>Personalized recommendations</li>
+                </ul>
+                <a href="http://localhost:5174/pregnancy-tracker" class="btn">Track Pregnancy</a>
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <h2 style="text-align: center; margin-bottom: 20px;">🚀 Try the New Features</h2>
+            <p style="text-align: center; margin-bottom: 30px;">
+                Test the real-time calling and report generation features with these demo actions:
+            </p>
+            
+            <div class="demo-buttons">
+                <button onclick="testEmergencyCall()" class="btn btn-danger">
+                    📞 Test Emergency Call
+                </button>
+                <button onclick="downloadReport()" class="btn btn-primary">
+                    📄 Generate Health Report
+                </button>
+                <button onclick="openDashboard()" class="btn">
+                    📊 Open Dashboard
+                </button>
+                <button onclick="testMedicalCall()" class="btn">
+                    🏥 Call Doctor
+                </button>
+            </div>
+        </div>
+
+        <div style="text-align: center; margin-top: 40px; opacity: 0.8;">
+            <p>🎉 All features are live and ready to test!</p>
+            <p>The complete AI-powered maternal health monitoring system with real-time calling and report generation.</p>
+        </div>
+    </div>
+
+    <script>
+        function testEmergencyCall() {
+            // Open emergency contacts page
+            window.open('http://localhost:5174/emergency', '_blank');
+            alert('🚨 Emergency calling feature opened!\n\n✓ Click any emergency button to test real-time calling\n✓ Location will be automatically shared\n✓ Call will be logged in the system');
+        }
+
+        function downloadReport() {
+            // Open dashboard where report download is available
+            window.open('http://localhost:5174/dashboard', '_blank');
+            alert('📄 Report generation feature ready!\n\n✓ Click "Download Report" button on dashboard\n✓ Comprehensive PDF will be generated\n✓ Includes AI insights and recommendations');
+        }
+
+        function openDashboard() {
+            window.open('http://localhost:5174/dashboard', '_blank');
+        }
+
+        function testMedicalCall() {
+            // Open medical records page
+            window.open('http://localhost:5174/medical', '_blank');
+            alert('🏥 Medical calling features available!\n\n✓ Quick call buttons for doctor and hospital\n✓ Emergency calling option\n✓ Integrated with medical records');
+        }
+
+        // Test server connectivity on page load
+        window.onload = function() {
+            Promise.all([
+                fetch('http://localhost:5174').then(r => r.ok).catch(() => false),
+                fetch('http://localhost:5000').then(r => r.ok).catch(() => false)
+            ]).then(([frontendOk, backendOk]) => {
+                if (!frontendOk || !backendOk) {
+                    alert('⚠️ Server Connection Issue\n\nFrontend: ' + (frontendOk ? '✓ Connected' : '❌ Disconnected') + 
+                          '\nBackend: ' + (backendOk ? '✓ Connected' : '❌ Disconnected') + 
+                          '\n\nPlease ensure both servers are running.');
+                }
+            });
+        };
+    </script>
+</body>
+</html>

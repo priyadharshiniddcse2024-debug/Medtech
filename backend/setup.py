@@ -20,11 +20,18 @@ def initialize_database():
     print("Database initialized successfully!")
 
 def train_ml_model():
-    """Train the ML model"""
-    print("Training ML model...")
-    from ml_model.risk_predictor import RiskPredictor
-    predictor = RiskPredictor()
-    print("ML model trained and saved successfully!")
+    """Train the enhanced ML model"""
+    print("Training Enhanced ML model...")
+    try:
+        from ml_model.enhanced_risk_predictor import EnhancedRiskPredictor
+        predictor = EnhancedRiskPredictor()
+        print("Enhanced ML model trained and saved successfully!")
+    except Exception as e:
+        print(f"Error training enhanced model: {e}")
+        print("Falling back to basic model...")
+        from ml_model.risk_predictor import RiskPredictor
+        predictor = RiskPredictor()
+        print("Basic ML model trained and saved successfully!")
 
 def main():
     """Main setup function"""

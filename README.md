@@ -179,12 +179,19 @@ This application provides educational information and AI-powered insights but do
 
 ## 🌍 Deployment Options
 
+### 🆓 FREE Deployment (Recommended)
+Deploy completely free using Render + Vercel:
+- **Backend:** Render (750 hours/month free)
+- **Frontend:** Vercel (unlimited free)
+- **Setup Time:** 10 minutes
+- **See:** [FREE_DEPLOYMENT_QUICKSTART.md](FREE_DEPLOYMENT_QUICKSTART.md)
+
 ### Development
 - **Local Setup**: SQLite database, Flask dev server
 - **Docker**: Containerized deployment
 - **Environment Variables**: Configurable settings
 
-### Production
+### Production Alternatives
 - **Cloud Platforms**: AWS, GCP, Azure support
 - **Database Options**: PostgreSQL, MySQL, Firebase
 - **Scaling**: Horizontal scaling ready

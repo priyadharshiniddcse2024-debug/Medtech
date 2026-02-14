@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import axios from 'axios'
+import axios from '../../utils/api'
 import { 
   Activity, 
   Heart, 
@@ -19,13 +19,36 @@ const HealthEntry = () => {
     diastolic_bp: '',
     blood_sugar: '',
     body_weight: '',
-    hemoglobin: ''
+    hemoglobin: '',
+    heart_rate: '',
+    protein_urine: '',
+    age: '',
+    gestational_week: ''
   })
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
   
   const navigate = useNavigate()
+
+  // Pre-fill form from URL parameters for testing
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const newFormData = { ...formData }
+    let hasParams = false
+    
+    ['systolic_bp', 'diastolic_bp', 'blood_sugar', 'body_weight', 'hemoglobin'].forEach(param => {
+      const value = urlParams.get(param)
+      if (value) {
+        newFormData[param] = value
+        hasParams = true
+      }
+    })
+    
+    if (hasParams) {
+      setFormData(newFormData)
+    }
+  }, [])
 
   const handleChange = (e) => {
     setFormData({
@@ -36,7 +59,7 @@ const HealthEntry = () => {
   }
 
   const validateForm = () => {
-    const { systolic_bp, diastolic_bp, blood_sugar, body_weight, hemoglobin } = formData
+    const { systolic_bp, diastolic_bp, blood_sugar, body_weight, hemoglobin, heart_rate, age, gestational_week } = formData
     
     if (parseInt(systolic_bp) < 80 || parseInt(systolic_bp) > 200) {
       setError('Systolic blood pressure should be between 80-200 mmHg')
@@ -62,6 +85,21 @@ const HealthEntry = () => {
       setError('Hemoglobin should be between 6-18 g/dL')
       return false
     }
+
+    if (heart_rate && (parseInt(heart_rate) < 50 || parseInt(heart_rate) > 150)) {
+      setError('Heart rate should be between 50-150 bpm')
+      return false
+    }
+
+    if (age && (parseInt(age) < 16 || parseInt(age) > 45)) {
+      setError('Age should be between 16-45 years')
+      return false
+    }
+
+    if (gestational_week && (parseInt(gestational_week) < 1 || parseInt(gestational_week) > 42)) {
+      setError('Gestational week should be between 1-42 weeks')
+      return false
+    }
     
     return true
   }
@@ -83,7 +121,11 @@ const HealthEntry = () => {
         diastolic_bp: parseInt(formData.diastolic_bp),
         blood_sugar: parseFloat(formData.blood_sugar),
         body_weight: parseFloat(formData.body_weight),
-        hemoglobin: parseFloat(formData.hemoglobin)
+        hemoglobin: parseFloat(formData.hemoglobin),
+        heart_rate: formData.heart_rate ? parseInt(formData.heart_rate) : 75,
+        protein_urine: formData.protein_urine ? parseFloat(formData.protein_urine) : 0.1,
+        age: formData.age ? parseInt(formData.age) : 28,
+        gestational_week: formData.gestational_week ? parseInt(formData.gestational_week) : 20
       })
       
       setResult(response.data)

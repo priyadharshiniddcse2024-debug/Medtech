@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import axios from 'axios'
+import axios from '../../utils/api'
 import { 
   Activity, 
   Baby, 
@@ -9,7 +9,9 @@ import {
   AlertTriangle,
   Heart,
   Plus,
-  Clock
+  Clock,
+  Download,
+  FileText
 } from 'lucide-react'
 import { format } from 'date-fns'
 
@@ -17,6 +19,7 @@ const Dashboard = () => {
   const [dashboardData, setDashboardData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [downloadingReport, setDownloadingReport] = useState(false)
 
   useEffect(() => {
     fetchDashboardData()
@@ -31,6 +34,54 @@ const Dashboard = () => {
       console.error('Dashboard error:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const downloadHealthReport = async () => {
+    setDownloadingReport(true)
+    try {
+      const response = await axios.get('/generate-report', {
+        responseType: 'blob',
+        headers: {
+          'Accept': 'application/pdf'
+        }
+      })
+      
+      // Create blob link to download
+      const blob = new Blob([response.data], { type: 'application/pdf' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      
+      // Get filename from response headers or use default
+      const contentDisposition = response.headers['content-disposition']
+      let filename = `maternal_health_report_${new Date().toISOString().split('T')[0]}.pdf`
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+        if (filenameMatch && filenameMatch[1]) {
+          filename = filenameMatch[1].replace(/['"]/g, '')
+        }
+      }
+      
+      link.setAttribute('download', filename)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+      
+      // Show success message
+      alert('✅ Health report downloaded successfully!')
+      
+    } catch (error) {
+      console.error('Report generation error:', error)
+      if (error.response?.status === 500) {
+        setError('Report generation failed. Please try adding some health records first.')
+      } else {
+        setError('Failed to generate report. Please check your connection.')
+      }
+      alert('❌ Failed to generate report. Please try again.')
+    } finally {
+      setDownloadingReport(false)
     }
   }
 
@@ -72,8 +123,28 @@ const Dashboard = () => {
   return (
     <div className="dashboard fade-in">
       <div className="dashboard-header">
-        <h1>Health Dashboard</h1>
-        <p>Monitor your pregnancy journey with AI-powered insights</p>
+        <div className="header-content">
+          <div>
+            <h1>Health Dashboard</h1>
+            <p>Monitor your pregnancy journey with AI-powered insights</p>
+          </div>
+          <button 
+            onClick={downloadHealthReport}
+            className="btn btn-secondary download-report-btn"
+            disabled={downloadingReport}
+          >
+            {downloadingReport ? (
+              <>
+                <div className="pulse">Generating...</div>
+              </>
+            ) : (
+              <>
+                <Download size={16} />
+                Download Report
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Pregnancy Status Card */}
@@ -239,6 +310,14 @@ const Dashboard = () => {
           margin-bottom: 2rem;
         }
 
+        .header-content {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 1rem;
+        }
+
         .dashboard-header h1 {
           font-size: 2.5rem;
           color: var(--primary-color);
@@ -248,6 +327,30 @@ const Dashboard = () => {
         .dashboard-header p {
           color: var(--text-secondary);
           font-size: 1.1rem;
+        }
+
+        .download-report-btn {
+          background: var(--secondary-color);
+          color: white;
+          border: none;
+          padding: 0.75rem 1.5rem;
+          border-radius: 8px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+
+        .download-report-btn:hover:not(:disabled) {
+          background: #059669;
+          transform: translateY(-1px);
+        }
+
+        .download-report-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
         }
 
         .quick-actions {
@@ -378,6 +481,11 @@ const Dashboard = () => {
         @media (max-width: 768px) {
           .dashboard-header h1 {
             font-size: 2rem;
+          }
+          
+          .header-content {
+            flex-direction: column;
+            align-items: stretch;
           }
           
           .quick-actions {

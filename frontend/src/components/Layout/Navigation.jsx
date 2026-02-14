@@ -1,24 +1,18 @@
 import React from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { useAuth } from '../../contexts/AuthContext'
+import { Link, useLocation } from 'react-router-dom'
 import { 
   Heart, 
   LayoutDashboard, 
   Activity, 
   Baby, 
-  LogOut, 
-  User 
+  Thermometer,
+  BarChart3,
+  Phone,
+  FileText
 } from 'lucide-react'
 
 const Navigation = () => {
   const location = useLocation()
-  const navigate = useNavigate()
-  const { user, logout } = useAuth()
-
-  const handleLogout = () => {
-    logout()
-    navigate('/login')
-  }
 
   const navItems = [
     {
@@ -35,6 +29,26 @@ const Navigation = () => {
       path: '/pregnancy-tracker',
       icon: Baby,
       label: 'Pregnancy Tracker'
+    },
+    {
+      path: '/symptoms',
+      icon: Thermometer,
+      label: 'Symptoms'
+    },
+    {
+      path: '/analytics',
+      icon: BarChart3,
+      label: 'Analytics'
+    },
+    {
+      path: '/emergency',
+      icon: Phone,
+      label: 'Emergency'
+    },
+    {
+      path: '/medical',
+      icon: FileText,
+      label: 'Medical Records'
     }
   ]
 
@@ -67,17 +81,11 @@ const Navigation = () => {
 
       <div className="nav-footer">
         <div className="nav-user">
-          <User size={20} />
           <div className="user-info">
-            <span className="user-name">{user?.name}</span>
-            <span className="user-email">{user?.email}</span>
+            <span className="user-name">Demo User</span>
+            <span className="user-email">demo@maternalcare.ai</span>
           </div>
         </div>
-        
-        <button onClick={handleLogout} className="nav-logout">
-          <LogOut size={20} />
-          <span>Logout</span>
-        </button>
       </div>
 
       <style jsx>{`
@@ -153,7 +161,6 @@ const Navigation = () => {
           padding: 0.75rem;
           background-color: var(--background-color);
           border-radius: 8px;
-          margin-bottom: 0.75rem;
         }
 
         .user-info {
@@ -171,25 +178,6 @@ const Navigation = () => {
         .user-email {
           font-size: 0.75rem;
           color: var(--text-secondary);
-        }
-
-        .nav-logout {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          width: 100%;
-          padding: 0.75rem;
-          background: none;
-          border: none;
-          color: var(--text-secondary);
-          cursor: pointer;
-          border-radius: 8px;
-          transition: all 0.2s ease;
-        }
-
-        .nav-logout:hover {
-          background-color: rgba(239, 68, 68, 0.1);
-          color: var(--danger-color);
         }
 
         @media (max-width: 768px) {

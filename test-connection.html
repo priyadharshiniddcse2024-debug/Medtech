@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maternal Health App - Connection Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .link-card {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .link-card h3 {
+            margin-top: 0;
+            color: #fff;
+        }
+        .link-card a {
+            color: #a3bffa;
+            text-decoration: none;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .link-card a:hover {
+            color: #fff;
+            text-decoration: underline;
+        }
+        .status {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .running {
+            background: #48bb78;
+            color: white;
+        }
+        .feature-list {
+            list-style: none;
+            padding: 0;
+        }
+        .feature-list li {
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .feature-list li:last-child {
+            border-bottom: none;
+        }
+        .test-button {
+            background: #48bb78;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+        .test-button:hover {
+            background: #38a169;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏥 AI-Powered Maternal Health Monitoring System</h1>
+        
+        <div class="link-card">
+            <h3>🌐 Frontend Application <span class="status running">RUNNING</span></h3>
+            <p><strong>Main App:</strong> <a href="http://localhost:5174" target="_blank">http://localhost:5174</a></p>
+            <p><strong>Features:</strong> Complete pregnancy care dashboard, health tracking, AI risk assessment</p>
+            <button class="test-button" onclick="testFrontend()">Test Frontend Connection</button>
+        </div>
+
+        <div class="link-card">
+            <h3>🔧 Backend API <span class="status running">RUNNING</span></h3>
+            <p><strong>API Endpoint:</strong> <a href="http://localhost:5000" target="_blank">http://localhost:5000</a></p>
+            <p><strong>Features:</strong> Flask API, SQLite database, AI ML model, demo user</p>
+            <button class="test-button" onclick="testBackend()">Test Backend Connection</button>
+        </div>
+
+        <div class="link-card">
+            <h3>📱 Available Features</h3>
+            <ul class="feature-list">
+                <li>🏠 <a href="http://localhost:5174/dashboard">Dashboard</a> - Health overview and quick actions</li>
+                <li>🏥 <a href="http://localhost:5174/health-entry">Health Entry</a> - Add health parameters with AI analysis</li>
+                <li>🤱 <a href="http://localhost:5174/pregnancy-tracker">Pregnancy Tracker</a> - Week-by-week guidance</li>
+                <li>🌡️ <a href="http://localhost:5174/symptoms">Symptoms Tracker</a> - Log and monitor symptoms</li>
+                <li>📊 <a href="http://localhost:5174/analytics">Analytics</a> - Advanced health data visualization</li>
+                <li>📞 <a href="http://localhost:5174/emergency">Emergency</a> - Emergency contacts and guidelines</li>
+                <li>📋 <a href="http://localhost:5174/medical">Medical Records</a> - Comprehensive record management</li>
+            </ul>
+        </div>
+
+        <div class="link-card">
+            <h3>🚀 Quick Start Guide</h3>
+            <ol>
+                <li>Click the <strong>Frontend Application</strong> link above</li>
+                <li>You'll go directly to the dashboard (no login required)</li>
+                <li>Click "Add Health Record" to test the AI system</li>
+                <li>Enter sample health parameters to get risk assessment</li>
+                <li>Explore all features using the sidebar navigation</li>
+            </ol>
+        </div>
+
+        <div class="link-card">
+            <h3>🔍 Connection Status</h3>
+            <p id="connection-status">Testing connections...</p>
+        </div>
+    </div>
+
+    <script>
+        function testFrontend() {
+            fetch('http://localhost:5174')
+                .then(response => {
+                    if (response.ok) {
+                        alert('✅ Frontend is working! Opening the app...');
+                        window.open('http://localhost:5174', '_blank');
+                    } else {
+                        alert('❌ Frontend connection failed');
+                    }
+                })
+                .catch(error => {
+                    alert('❌ Frontend connection error: ' + error.message);
+                });
+        }
+
+        function testBackend() {
+            fetch('http://localhost:5000')
+                .then(response => {
+                    if (response.ok) {
+                        alert('✅ Backend API is working!');
+                        window.open('http://localhost:5000', '_blank');
+                    } else {
+                        alert('❌ Backend connection failed');
+                    }
+                })
+                .catch(error => {
+                    alert('❌ Backend connection error: ' + error.message);
+                });
+        }
+
+        // Test connections on page load
+        window.onload = function() {
+            const statusElement = document.getElementById('connection-status');
+            
+            Promise.all([
+                fetch('http://localhost:5174').then(r => r.ok).catch(() => false),
+                fetch('http://localhost:5000').then(r => r.ok).catch(() => false)
+            ]).then(([frontendOk, backendOk]) => {
+                const frontendStatus = frontendOk ? '✅ Frontend: Connected' : '❌ Frontend: Disconnected';
+                const backendStatus = backendOk ? '✅ Backend: Connected' : '❌ Backend: Disconnected';
+                statusElement.innerHTML = frontendStatus + '<br>' + backendStatus;
+            });
+        };
+    </script>
+</body>
+</html>
