@@ -196,6 +196,17 @@ const PregnancyTracker = () => {
     )
   }
 
+  if (error && !pregnancyProfile) {
+    return (
+      <div className="pregnancy-tracker fade-in">
+        <div className="error">
+          <AlertTriangle size={16} />
+          {error}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="pregnancy-tracker fade-in">
       <div className="tracker-header">
