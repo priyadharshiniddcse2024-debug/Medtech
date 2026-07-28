@@ -694,7 +694,7 @@ const EnhancedHealthEntry = () => {
                     max="5"
                     step="0.1"
                   />
-                  <small className="form-help">Normal: <0.3 g/L</small>
+                  <small className="form-help">Normal: &lt;0.3 g/L</small>
                 </div>
 
                 <div className="form-group">
