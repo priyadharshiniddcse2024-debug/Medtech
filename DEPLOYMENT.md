@@ -263,9 +263,12 @@
 
 ```bash
 # .env
+# Required in production, minimum 32 characters:
+# python -c "import secrets; print(secrets.token_urlsafe(32))"
 SECRET_KEY=your-secret-key-here
 DATABASE_URL=sqlite:///maternal_health.db
 FLASK_ENV=production
+# Explicit origin list, wildcards are ignored
 CORS_ORIGINS=https://your-frontend-domain.com
 ```
 
@@ -391,11 +394,12 @@ Set up automated backups using:
 
 ### Debug Mode
 
-Enable debug mode for development:
+Enable debug mode for local development only — the Werkzeug debugger allows
+remote code execution and must never be enabled on a deployed instance:
 
-```python
+```bash
 # Backend
-app.run(debug=True)
+FLASK_DEBUG=true python app.py
 ```
 
 ```bash

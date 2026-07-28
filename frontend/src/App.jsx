@@ -8,29 +8,53 @@ import AdvancedDashboard from './components/Analytics/AdvancedDashboard'
 import EmergencyContacts from './components/Emergency/EmergencyContacts'
 import MedicalManager from './components/Medical/MedicalManager'
 import Navigation from './components/Layout/Navigation'
+import Login from './components/Auth/Login'
+import Register from './components/Auth/Register'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
 import './App.css'
+
+const RequireAuth = ({ children }) => {
+  const { user } = useAuth()
+  return user ? children : <Navigate to="/login" replace />
+}
+
+const AppShell = ({ children }) => (
+  <div className="app">
+    <div className="app-layout">
+      <Navigation />
+      <main className="main-content">{children}</main>
+    </div>
+  </div>
+)
+
+const protectedRoutes = [
+  ['/dashboard', <Dashboard />],
+  ['/health-entry', <EnhancedHealthEntry />],
+  ['/pregnancy-tracker', <PregnancyTracker />],
+  ['/symptoms', <SymptomTracker />],
+  ['/analytics', <AdvancedDashboard />],
+  ['/emergency', <EmergencyContacts />],
+  ['/medical', <MedicalManager />],
+]
 
 function App() {
   return (
-    <Router>
-      <div className="app">
-        <div className="app-layout">
-          <Navigation />
-          <main className="main-content">
-            <Routes>
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/health-entry" element={<EnhancedHealthEntry />} />
-              <Route path="/pregnancy-tracker" element={<PregnancyTracker />} />
-              <Route path="/symptoms" element={<SymptomTracker />} />
-              <Route path="/analytics" element={<AdvancedDashboard />} />
-              <Route path="/emergency" element={<EmergencyContacts />} />
-              <Route path="/medical" element={<MedicalManager />} />
-              <Route path="/" element={<Navigate to="/dashboard" />} />
-            </Routes>
-          </main>
-        </div>
-      </div>
-    </Router>
+    <AuthProvider>
+      <Router>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          {protectedRoutes.map(([path, element]) => (
+            <Route
+              key={path}
+              path={path}
+              element={<RequireAuth><AppShell>{element}</AppShell></RequireAuth>}
+            />
+          ))}
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </Router>
+    </AuthProvider>
   )
 }
 

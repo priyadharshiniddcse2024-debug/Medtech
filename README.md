@@ -57,7 +57,7 @@ A comprehensive web application for pregnancy care and early risk detection usin
 - **Synthetic Training Data** - Based on medical literature
 
 ### Security & Privacy
-- **Password Hashing** - SHA-256 encryption
+- **Password Hashing** - Salted PBKDF2 via Werkzeug
 - **JWT Tokens** - Secure authentication
 - **Input Validation** - Comprehensive data sanitization
 - **HTTPS Ready** - Production security
@@ -78,12 +78,19 @@ cd backend
 # Install Python dependencies
 pip install -r requirements.txt
 
+# Configure environment (SECRET_KEY, CORS_ORIGINS, ...)
+cp .env.example .env
+
 # Run setup script (initializes DB and trains ML model)
 python setup.py
 
 # Start Flask server
 python app.py
 ```
+
+The API requires a `SECRET_KEY` in production and only accepts requests from the
+origins listed in `CORS_ORIGINS`. All `/api` endpoints except `/api/login` and
+`/api/register` require a valid JWT bearer token.
 
 Backend will be available at `http://localhost:5000`
 

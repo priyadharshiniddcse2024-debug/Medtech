@@ -1,9 +1,13 @@
+from dotenv import load_dotenv
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
+from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3
 import hashlib
+import secrets
 import jwt
 import datetime
+import re
 from functools import wraps
 import os
 import io
@@ -17,9 +21,29 @@ from ml_model.enhanced_risk_predictor import EnhancedRiskPredictor
 from utils.pregnancy_tracker import PregnancyTracker
 from utils.health_recommendations import HealthRecommendations
 
+load_dotenv()
+
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'maternal-health-secret-key-2024')
-CORS(app)
+
+IS_PRODUCTION = os.environ.get('FLASK_ENV', 'development').lower() == 'production'
+
+SECRET_KEY = os.environ.get('SECRET_KEY')
+if IS_PRODUCTION and SECRET_KEY and len(SECRET_KEY) < 32:
+    raise RuntimeError('SECRET_KEY must be at least 32 characters long')
+if not SECRET_KEY:
+    if IS_PRODUCTION:
+        raise RuntimeError('SECRET_KEY environment variable must be set in production')
+    SECRET_KEY = secrets.token_urlsafe(32)
+    print('WARNING: SECRET_KEY not set, using an ephemeral development key. '
+          'Existing tokens will be invalidated on restart.')
+app.config['SECRET_KEY'] = SECRET_KEY
+
+CORS_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get('CORS_ORIGINS', 'http://localhost:5173,http://localhost:3000').split(',')
+    if origin.strip() and origin.strip() != '*'
+]
+CORS(app, resources={r'/api/*': {'origins': CORS_ORIGINS}}, supports_credentials=True)
 
 # Initialize enhanced ML model and utilities
 try:
@@ -88,53 +112,110 @@ def init_db():
         )
     ''')
     
-    # Create demo user if it doesn't exist
-    cursor.execute('SELECT id FROM users WHERE email = ?', ('demo@maternalcare.ai',))
-    if not cursor.fetchone():
-        demo_password_hash = hashlib.sha256('demo123'.encode()).hexdigest()
-        cursor.execute('''
-            INSERT INTO users (email, password_hash, name, age)
-            VALUES (?, ?, ?, ?)
-        ''', ('demo@maternalcare.ai', demo_password_hash, 'Demo User', 28))
+    # Create demo user if it doesn't exist and an explicit password is configured
+    demo_password = os.environ.get('DEMO_USER_PASSWORD')
+    if demo_password and not IS_PRODUCTION:
+        cursor.execute('SELECT id FROM users WHERE email = ?', ('demo@maternalcare.ai',))
+        if not cursor.fetchone():
+            cursor.execute('''
+                INSERT INTO users (email, password_hash, name, age)
+                VALUES (?, ?, ?, ?)
+            ''', ('demo@maternalcare.ai', generate_password_hash(demo_password), 'Demo User', 28))
     
     conn.commit()
     conn.close()
 
 def token_required(f):
-    """Decorator for JWT token authentication - Modified for demo mode"""
+    """Decorator enforcing a valid JWT bearer token"""
     @wraps(f)
     def decorated(*args, **kwargs):
-        token = request.headers.get('Authorization')
+        auth_header = request.headers.get('Authorization', '')
+        parts = auth_header.split()
         
-        # For demo purposes, allow access with demo-token or create a demo user
-        if not token or token == 'Bearer demo-token':
-            # Use a demo user ID
-            current_user_id = 1
-            return f(current_user_id, *args, **kwargs)
+        if len(parts) != 2 or parts[0].lower() != 'bearer':
+            return jsonify({'message': 'Authorization token required'}), 401
         
         try:
-            token = token.split(' ')[1]  # Remove 'Bearer ' prefix
-            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
-            current_user_id = data['user_id']
-        except:
-            # Fallback to demo user for invalid tokens
-            current_user_id = 1
+            data = jwt.decode(parts[1], app.config['SECRET_KEY'], algorithms=['HS256'])
+            current_user_id = int(data['user_id'])
+        except jwt.ExpiredSignatureError:
+            return jsonify({'message': 'Token expired'}), 401
+        except (jwt.InvalidTokenError, KeyError, TypeError, ValueError):
+            return jsonify({'message': 'Invalid token'}), 401
         
         return f(current_user_id, *args, **kwargs)
     return decorated
 
+EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+MIN_PASSWORD_LENGTH = 8
+TOKEN_LIFETIME = datetime.timedelta(hours=12)
+
+def verify_password(cursor, user_id, stored_hash, password):
+    """Check a password against a stored hash, upgrading legacy SHA-256 hashes"""
+    if stored_hash and '$' in stored_hash:
+        return check_password_hash(stored_hash, password)
+    
+    # Legacy unsalted SHA-256 hash: verify, then re-hash with a modern algorithm
+    legacy_hash = hashlib.sha256(password.encode()).hexdigest()
+    if not secrets.compare_digest(legacy_hash, stored_hash or ''):
+        return False
+    
+    cursor.execute(
+        'UPDATE users SET password_hash = ? WHERE id = ?',
+        (generate_password_hash(password), user_id)
+    )
+    return True
+
+# Physiologically plausible bounds used to reject malformed or out-of-range input
+HEALTH_PARAM_RANGES = {
+    'systolic_bp': (50, 300),
+    'diastolic_bp': (30, 200),
+    'blood_sugar': (20, 600),
+    'body_weight': (20, 400),
+    'hemoglobin': (2, 25),
+    'heart_rate': (30, 250),
+    'protein_urine': (0, 20),
+    'age': (10, 70),
+    'gestational_week': (1, 45),
+}
+
+def parse_numeric(value, field, minimum, maximum):
+    """Coerce a value to float and ensure it falls inside an inclusive range"""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f'{field} must be a number')
+    if not minimum <= number <= maximum:
+        raise ValueError(f'{field} must be between {minimum} and {maximum}')
+    return number
+
 @app.route('/api/register', methods=['POST'])
 def register():
     """User registration endpoint"""
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     
     # Validate required fields
     required_fields = ['email', 'password', 'name', 'age']
     if not all(field in data for field in required_fields):
         return jsonify({'message': 'Missing required fields'}), 400
     
-    # Hash password
-    password_hash = hashlib.sha256(data['password'].encode()).hexdigest()
+    email = str(data['email']).strip().lower()
+    name = str(data['name']).strip()
+    password = data['password']
+    
+    if not EMAIL_RE.match(email) or len(email) > 254:
+        return jsonify({'message': 'Invalid email address'}), 400
+    if not isinstance(password, str) or len(password) < MIN_PASSWORD_LENGTH:
+        return jsonify({'message': f'Password must be at least {MIN_PASSWORD_LENGTH} characters'}), 400
+    if not 1 <= len(name) <= 100:
+        return jsonify({'message': 'Name must be between 1 and 100 characters'}), 400
+    
+    try:
+        age = int(parse_numeric(data['age'], 'age', *HEALTH_PARAM_RANGES['age']))
+    except ValueError as e:
+        return jsonify({'message': str(e)}), 400
+    
+    password_hash = generate_password_hash(password)
     
     try:
         conn = sqlite3.connect('maternal_health.db')
@@ -143,7 +224,7 @@ def register():
         cursor.execute('''
             INSERT INTO users (email, password_hash, name, age)
             VALUES (?, ?, ?, ?)
-        ''', (data['email'], password_hash, data['name'], data['age']))
+        ''', (email, password_hash, name, age))
         
         user_id = cursor.lastrowid
         conn.commit()
@@ -152,7 +233,7 @@ def register():
         # Generate JWT token
         token = jwt.encode({
             'user_id': user_id,
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(days=30)
+            'exp': datetime.datetime.now(datetime.timezone.utc) + TOKEN_LIFETIME
         }, app.config['SECRET_KEY'], algorithm='HS256')
         
         return jsonify({
@@ -163,72 +244,69 @@ def register():
         
     except sqlite3.IntegrityError:
         return jsonify({'message': 'Email already exists'}), 409
-    except Exception as e:
+    except Exception:
+        app.logger.exception('Registration failed')
         return jsonify({'message': 'Registration failed'}), 500
 
 @app.route('/api/login', methods=['POST'])
 def login():
     """User login endpoint"""
-    data = request.get_json()
-    print(f"Login attempt - Email: {data.get('email')}, Password provided: {bool(data.get('password'))}")
+    data = request.get_json(silent=True) or {}
+    email = str(data.get('email', '')).strip().lower()
+    password = data.get('password')
     
-    if not data.get('email') or not data.get('password'):
-        print("Missing email or password")
+    if not email or not isinstance(password, str) or not password:
         return jsonify({'message': 'Email and password required'}), 400
-    
-    password_hash = hashlib.sha256(data['password'].encode()).hexdigest()
-    print(f"Password hash: {password_hash}")
     
     conn = sqlite3.connect('maternal_health.db')
     cursor = conn.cursor()
     
-    cursor.execute('''
-        SELECT id, name FROM users WHERE email = ? AND password_hash = ?
-    ''', (data['email'], password_hash))
-    
+    cursor.execute('SELECT id, name, password_hash FROM users WHERE email = ?', (email,))
     user = cursor.fetchone()
-    print(f"User found: {bool(user)}")
+    
+    if not user or not verify_password(cursor, user[0], user[2], password):
+        conn.close()
+        return jsonify({'message': 'Invalid credentials'}), 401
+    
+    conn.commit()
     conn.close()
     
-    if user:
-        token = jwt.encode({
-            'user_id': user[0],
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(days=30)
-        }, app.config['SECRET_KEY'], algorithm='HS256')
-        
-        return jsonify({
-            'message': 'Login successful',
-            'token': token,
-            'user_id': user[0],
-            'name': user[1]
-        }), 200
-    else:
-        print("Invalid credentials")
-        return jsonify({'message': 'Invalid credentials'}), 401
+    token = jwt.encode({
+        'user_id': user[0],
+        'exp': datetime.datetime.now(datetime.timezone.utc) + TOKEN_LIFETIME
+    }, app.config['SECRET_KEY'], algorithm='HS256')
+    
+    return jsonify({
+        'message': 'Login successful',
+        'token': token,
+        'user_id': user[0],
+        'name': user[1]
+    }), 200
 
 @app.route('/api/health-record', methods=['POST'])
 @token_required
 def add_health_record(current_user_id):
     """Add new health record and get comprehensive AI analysis"""
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     
     # Validate required health parameters
     required_fields = ['systolic_bp', 'diastolic_bp', 'blood_sugar', 'body_weight', 'hemoglobin']
     if not all(field in data for field in required_fields):
         return jsonify({'message': 'Missing required health parameters'}), 400
     
-    # Prepare health parameters for AI analysis
-    health_params = {
-        'systolic_bp': data['systolic_bp'],
-        'diastolic_bp': data['diastolic_bp'],
-        'blood_sugar': data['blood_sugar'],
-        'body_weight': data['body_weight'],
-        'hemoglobin': data['hemoglobin'],
-        'heart_rate': data.get('heart_rate', 75),
-        'protein_urine': data.get('protein_urine', 0.1),
-        'age': data.get('age', 28),
-        'gestational_week': data.get('gestational_week', 20)
-    }
+    defaults = {'heart_rate': 75, 'protein_urine': 0.1, 'age': 28, 'gestational_week': 20}
+    
+    # Prepare and validate health parameters for AI analysis
+    try:
+        health_params = {
+            field: parse_numeric(data.get(field, defaults.get(field)), field, *bounds)
+            for field, bounds in HEALTH_PARAM_RANGES.items()
+        }
+    except ValueError as e:
+        return jsonify({'message': str(e)}), 400
+    
+    if health_params['diastolic_bp'] > health_params['systolic_bp']:
+        return jsonify({'message': 'diastolic_bp cannot exceed systolic_bp'}), 400
     
     # Get comprehensive AI prediction
     ai_results = risk_predictor.predict_comprehensive(health_params)
@@ -244,8 +322,8 @@ def add_health_record(current_user_id):
          detected_conditions, condition_details)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (current_user_id, 
-          data['systolic_bp'], data['diastolic_bp'], data['blood_sugar'], 
-          data['body_weight'], data['hemoglobin'], health_params['heart_rate'],
+          health_params['systolic_bp'], health_params['diastolic_bp'], health_params['blood_sugar'], 
+          health_params['body_weight'], health_params['hemoglobin'], health_params['heart_rate'],
           health_params['protein_urine'], health_params['age'], 
           health_params['gestational_week'], ai_results['risk_level'],
           json.dumps(ai_results['detected_conditions']),
@@ -275,13 +353,25 @@ def add_health_record(current_user_id):
 @token_required
 def create_pregnancy_profile(current_user_id):
     """Create or update pregnancy profile"""
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
+    lmp = data.get('last_menstrual_period')
     
-    if not data.get('last_menstrual_period'):
+    if not lmp:
         return jsonify({'message': 'Last menstrual period date required'}), 400
     
+    try:
+        lmp_date = datetime.datetime.strptime(str(lmp), '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'message': 'last_menstrual_period must be a YYYY-MM-DD date'}), 400
+    
+    today = datetime.date.today()
+    if not today - datetime.timedelta(days=320) <= lmp_date <= today:
+        return jsonify({'message': 'last_menstrual_period must be within the last 320 days'}), 400
+    
+    lmp = lmp_date.isoformat()
+    
     # Calculate expected due date and current week
-    profile_data = pregnancy_tracker.create_profile(data['last_menstrual_period'])
+    profile_data = pregnancy_tracker.create_profile(lmp)
     
     conn = sqlite3.connect('maternal_health.db')
     cursor = conn.cursor()
@@ -294,7 +384,7 @@ def create_pregnancy_profile(current_user_id):
         INSERT INTO pregnancy_profiles 
         (user_id, last_menstrual_period, expected_due_date, current_week)
         VALUES (?, ?, ?, ?)
-    ''', (current_user_id, data['last_menstrual_period'], 
+    ''', (current_user_id, lmp, 
           profile_data['expected_due_date'], profile_data['current_week']))
     
     profile_id = cursor.lastrowid
@@ -312,6 +402,9 @@ def create_pregnancy_profile(current_user_id):
 @token_required
 def get_pregnancy_guidance(current_user_id, week):
     """Get week-specific pregnancy guidance"""
+    if not 1 <= week <= 45:
+        return jsonify({'message': 'week must be between 1 and 45'}), 400
+    
     guidance = pregnancy_tracker.get_weekly_guidance(week)
     return jsonify(guidance), 200
 
@@ -560,28 +653,27 @@ def generate_health_report(current_user_id):
             mimetype='application/pdf'
         )
         
-        # Add CORS headers for frontend access
-        response.headers['Access-Control-Allow-Origin'] = '*'
         response.headers['Access-Control-Expose-Headers'] = 'Content-Disposition'
         
         return response
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        app.logger.exception('Failed to generate health report')
+        return jsonify({'error': 'Failed to generate report'}), 500
 
 @app.route('/api/emergency-call', methods=['POST'])
 @token_required
 def initiate_emergency_call(current_user_id):
     """Log emergency call attempt and return call information"""
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     
     call_log = {
         'user_id': current_user_id,
-        'contact_name': data.get('contact_name', ''),
-        'phone_number': data.get('phone_number', ''),
-        'call_type': data.get('call_type', 'emergency'),
+        'contact_name': str(data.get('contact_name', ''))[:100],
+        'phone_number': str(data.get('phone_number', ''))[:32],
+        'call_type': str(data.get('call_type', 'emergency'))[:32],
         'timestamp': datetime.datetime.now().isoformat(),
-        'location': data.get('location', 'Unknown')
+        'location': str(data.get('location', 'Unknown'))[:200]
     }
     
     # In a real application, you would:
@@ -605,4 +697,7 @@ def initiate_emergency_call(current_user_id):
 
 if __name__ == '__main__':
     init_db()
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    debug = os.environ.get('FLASK_DEBUG', '').lower() in ('1', 'true', 'yes') and not IS_PRODUCTION
+    host = os.environ.get('HOST', '127.0.0.1')
+    port = int(os.environ.get('PORT', 5000))
+    app.run(debug=debug, host=host, port=port)
