@@ -14,4 +14,5 @@ services:
       - key: FLASK_ENV
         value: production
       - key: CORS_ORIGINS
-        value: "*"
+        # Comma-separated list of allowed frontend origins (no wildcards)
+        value: "https://your-frontend-domain.vercel.app"

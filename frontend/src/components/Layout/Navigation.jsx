@@ -8,11 +8,14 @@ import {
   Thermometer,
   BarChart3,
   Phone,
-  FileText
+  FileText,
+  LogOut
 } from 'lucide-react'
+import { useAuth } from '../../contexts/AuthContext'
 
 const Navigation = () => {
   const location = useLocation()
+  const { user, logout } = useAuth()
 
   const navItems = [
     {
@@ -82,9 +85,12 @@ const Navigation = () => {
       <div className="nav-footer">
         <div className="nav-user">
           <div className="user-info">
-            <span className="user-name">Demo User</span>
-            <span className="user-email">demo@maternalcare.ai</span>
+            <span className="user-name">{user?.name}</span>
+            <span className="user-email">{user?.email}</span>
           </div>
+          <button type="button" className="logout-button" onClick={logout} aria-label="Log out">
+            <LogOut size={16} />
+          </button>
         </div>
       </div>
 
@@ -178,6 +184,18 @@ const Navigation = () => {
         .user-email {
           font-size: 0.75rem;
           color: var(--text-secondary);
+        }
+
+        .logout-button {
+          background: none;
+          border: none;
+          cursor: pointer;
+          color: var(--text-secondary);
+          padding: 0.25rem;
+        }
+
+        .logout-button:hover {
+          color: var(--primary-color);
         }
 
         @media (max-width: 768px) {
