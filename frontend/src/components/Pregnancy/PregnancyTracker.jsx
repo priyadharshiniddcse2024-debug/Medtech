@@ -52,6 +52,7 @@ const PregnancyTracker = () => {
       setWeeklyGuidance(response.data)
     } catch (error) {
       console.error('Failed to load weekly guidance:', error)
+      setError(error.response?.data?.message || 'Failed to load weekly guidance')
     }
   }
 
@@ -191,6 +192,17 @@ const PregnancyTracker = () => {
             margin-top: 0.25rem;
           }
         `}</style>
+      </div>
+    )
+  }
+
+  if (error && !pregnancyProfile) {
+    return (
+      <div className="pregnancy-tracker fade-in">
+        <div className="error">
+          <AlertTriangle size={16} />
+          {error}
+        </div>
       </div>
     )
   }

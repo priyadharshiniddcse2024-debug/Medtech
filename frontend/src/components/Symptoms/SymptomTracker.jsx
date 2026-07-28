@@ -25,6 +25,7 @@ const SymptomTracker = () => {
     category: 'general'
   })
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
   const symptomCategories = {
     general: { icon: Activity, color: '#667eea', label: 'General' },
@@ -43,6 +44,7 @@ const SymptomTracker = () => {
   const handleAddSymptom = async (e) => {
     e.preventDefault()
     setLoading(true)
+    setError('')
 
     try {
       const symptomData = {
@@ -60,6 +62,7 @@ const SymptomTracker = () => {
       })
     } catch (error) {
       console.error('Error adding symptom:', error)
+      setError('Failed to log symptom. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -92,6 +95,7 @@ const SymptomTracker = () => {
               Log New Symptom
             </h2>
             
+            {error && <div className="error">{error}</div>}
             <form onSubmit={handleAddSymptom} className="symptom-form">
               <div className="form-group">
                 <label className="form-label">Symptom Name</label>
