@@ -5,6 +5,26 @@ from sklearn.multioutput import MultiOutputClassifier
 import joblib
 import os
 
+from ml_model.common import (
+    RISK_LEVELS,
+    build_training_sample,
+    extract_features,
+    importance_by_feature
+)
+
+# Values assumed when a health parameter is not supplied
+FEATURE_DEFAULTS = {
+    'systolic_bp': 120,
+    'diastolic_bp': 80,
+    'blood_sugar': 90,
+    'body_weight': 65,
+    'hemoglobin': 12,
+    'heart_rate': 75,
+    'protein_urine': 0.1,
+    'age': 28,
+    'gestational_week': 20
+}
+
 class EnhancedRiskPredictor:
     def __init__(self):
         self.risk_model = None
@@ -14,7 +34,7 @@ class EnhancedRiskPredictor:
             'systolic_bp', 'diastolic_bp', 'blood_sugar', 'body_weight', 
             'hemoglobin', 'heart_rate', 'protein_urine', 'age', 'gestational_week'
         ]
-        self.risk_levels = ['Normal', 'Medium', 'High']
+        self.risk_levels = RISK_LEVELS
         self.conditions = [
             'gestational_diabetes', 'preeclampsia', 'anemia', 'hypertension',
             'preterm_labor_risk', 'fetal_growth_restriction', 'placental_issues'
@@ -156,28 +176,18 @@ class EnhancedRiskPredictor:
                 conditions[6] = 1  # placental_issues
                 risk = 2
             
-            # Ensure realistic bounds
-            age = max(16, min(45, age))
-            systolic_bp = max(80, min(200, systolic_bp))
-            diastolic_bp = max(50, min(120, diastolic_bp))
-            blood_sugar = max(60, min(300, blood_sugar))
-            body_weight = max(40, min(150, body_weight))
-            hemoglobin = max(6, min(18, hemoglobin))
-            heart_rate = max(50, min(150, heart_rate))
-            protein_urine = max(0, min(5, protein_urine))
-            
-            # Add some realistic noise
-            features = [
-                systolic_bp + np.random.normal(0, 2),
-                diastolic_bp + np.random.normal(0, 1.5),
-                blood_sugar + np.random.normal(0, 3),
-                body_weight + np.random.normal(0, 1),
-                hemoglobin + np.random.normal(0, 0.2),
-                heart_rate + np.random.normal(0, 3),
-                protein_urine + np.random.normal(0, 0.1),
-                age + np.random.normal(0, 0.5),
-                gestational_week + np.random.normal(0, 0.5)
-            ]
+            # Clamp to realistic bounds and add measurement noise
+            features = build_training_sample({
+                'systolic_bp': systolic_bp,
+                'diastolic_bp': diastolic_bp,
+                'blood_sugar': blood_sugar,
+                'body_weight': body_weight,
+                'hemoglobin': hemoglobin,
+                'heart_rate': heart_rate,
+                'protein_urine': protein_urine,
+                'age': age,
+                'gestational_week': gestational_week
+            }, self.feature_names)
             
             data.append(features)
             risk_labels.append(risk)
@@ -218,10 +228,9 @@ class EnhancedRiskPredictor:
         print(f"Risk model accuracy: {self.risk_model.score(X_scaled, y_risk):.3f}")
         
         # Print feature importance for risk model
-        importance = self.risk_model.feature_importances_
         print("\nFeature importance for risk prediction:")
-        for i, feature in enumerate(self.feature_names):
-            print(f"{feature}: {importance[i]:.3f}")
+        for feature, importance in self.get_feature_importance().items():
+            print(f"{feature}: {importance:.3f}")
     
     def _save_model(self):
         """Save the trained models and scaler"""
@@ -235,18 +244,7 @@ class EnhancedRiskPredictor:
         if self.risk_model is None or self.condition_model is None:
             raise ValueError("Models not loaded or trained")
         
-        # Extract features in correct order
-        features = [
-            health_params.get('systolic_bp', 120),
-            health_params.get('diastolic_bp', 80),
-            health_params.get('blood_sugar', 90),
-            health_params.get('body_weight', 65),
-            health_params.get('hemoglobin', 12),
-            health_params.get('heart_rate', 75),
-            health_params.get('protein_urine', 0.1),
-            health_params.get('age', 28),
-            health_params.get('gestational_week', 20)
-        ]
+        features = extract_features(health_params, self.feature_names, FEATURE_DEFAULTS)
         
         # Scale features
         features_scaled = self.scaler.transform([features])
@@ -361,8 +359,4 @@ class EnhancedRiskPredictor:
         if self.risk_model is None:
             raise ValueError("Risk model not loaded or trained")
         
-        importance = self.risk_model.feature_importances_
-        return {
-            feature: float(imp) 
-            for feature, imp in zip(self.feature_names, importance)
-        }
+        return importance_by_feature(self.risk_model, self.feature_names)

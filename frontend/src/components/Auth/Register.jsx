@@ -2,28 +2,21 @@ import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { Heart, Mail, Lock, User, Calendar, AlertCircle } from 'lucide-react'
+import { useFormState } from '../../hooks/useFormState'
 
 const Register = () => {
-  const [formData, setFormData] = useState({
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const { formData, handleChange } = useFormState({
     name: '',
     email: '',
     password: '',
     confirmPassword: '',
     age: ''
-  })
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
+  }, () => setError(''))
   
   const { register } = useAuth()
   const navigate = useNavigate()
-
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    })
-    setError('')
-  }
 
   const validateForm = () => {
     if (formData.password !== formData.confirmPassword) {

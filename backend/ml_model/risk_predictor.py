@@ -4,12 +4,23 @@ from sklearn.preprocessing import StandardScaler
 import joblib
 import os
 
+from ml_model.common import (
+    PARAM_BOUNDS,
+    RISK_LEVELS,
+    build_training_sample,
+    extract_features,
+    importance_by_feature
+)
+
+# This model tolerates a slightly narrower range than the enhanced model
+BASIC_PARAM_BOUNDS = {**PARAM_BOUNDS, 'systolic_bp': (85, 200), 'body_weight': (45, 150)}
+
 class RiskPredictor:
     def __init__(self):
         self.model = None
         self.scaler = StandardScaler()
         self.feature_names = ['systolic_bp', 'diastolic_bp', 'blood_sugar', 'body_weight', 'hemoglobin']
-        self.risk_levels = ['Normal', 'Medium', 'High']
+        self.risk_levels = RISK_LEVELS
         
         # Load or train model
         self._load_or_train_model()
@@ -118,21 +129,14 @@ class RiskPredictor:
                 
                 risk = 2  # High
             
-            # Ensure realistic bounds with some outliers
-            systolic_bp = max(85, min(200, systolic_bp))
-            diastolic_bp = max(50, min(120, diastolic_bp))
-            blood_sugar = max(60, min(300, blood_sugar))
-            body_weight = max(45, min(150, body_weight))
-            hemoglobin = max(6, min(18, hemoglobin))
-            
-            # Add some noise for more realistic variation
-            systolic_bp += np.random.normal(0, 2)
-            diastolic_bp += np.random.normal(0, 1.5)
-            blood_sugar += np.random.normal(0, 3)
-            body_weight += np.random.normal(0, 1)
-            hemoglobin += np.random.normal(0, 0.2)
-            
-            data.append([systolic_bp, diastolic_bp, blood_sugar, body_weight, hemoglobin])
+            # Clamp to realistic bounds and add measurement noise
+            data.append(build_training_sample({
+                'systolic_bp': systolic_bp,
+                'diastolic_bp': diastolic_bp,
+                'blood_sugar': blood_sugar,
+                'body_weight': body_weight,
+                'hemoglobin': hemoglobin
+            }, self.feature_names, BASIC_PARAM_BOUNDS))
             labels.append(risk)
         
         return np.array(data), np.array(labels)
@@ -160,9 +164,8 @@ class RiskPredictor:
         print(f"Training accuracy: {self.model.score(X_scaled, y):.3f}")
         
         # Print feature importance
-        importance = self.model.feature_importances_
-        for i, feature in enumerate(self.feature_names):
-            print(f"{feature}: {importance[i]:.3f}")
+        for feature, importance in self.get_feature_importance().items():
+            print(f"{feature}: {importance:.3f}")
     
     def _save_model(self):
         """Save the trained model and scaler"""
@@ -175,21 +178,10 @@ class RiskPredictor:
         if self.model is None:
             raise ValueError("Model not loaded or trained")
         
-        # Extract features in correct order
-        features = [
-            health_params['systolic_bp'],
-            health_params['diastolic_bp'],
-            health_params['blood_sugar'],
-            health_params['body_weight'],
-            health_params['hemoglobin']
-        ]
-        
-        # Scale features
+        features = extract_features(health_params, self.feature_names)
         features_scaled = self.scaler.transform([features])
         
-        # Get prediction and probability
         prediction = self.model.predict(features_scaled)[0]
-        probabilities = self.model.predict_proba(features_scaled)[0]
         
         # Add additional logic for edge cases and more realistic predictions
         systolic = health_params['systolic_bp']
@@ -235,14 +227,7 @@ class RiskPredictor:
         if self.model is None:
             raise ValueError("Model not loaded or trained")
         
-        features = [
-            health_params['systolic_bp'],
-            health_params['diastolic_bp'],
-            health_params['blood_sugar'],
-            health_params['body_weight'],
-            health_params['hemoglobin']
-        ]
-        
+        features = extract_features(health_params, self.feature_names)
         features_scaled = self.scaler.transform([features])
         probabilities = self.model.predict_proba(features_scaled)[0]
         
@@ -256,8 +241,4 @@ class RiskPredictor:
         if self.model is None:
             raise ValueError("Model not loaded or trained")
         
-        importance = self.model.feature_importances_
-        return {
-            feature: float(imp) 
-            for feature, imp in zip(self.feature_names, importance)
-        }
+        return importance_by_feature(self.model, self.feature_names)

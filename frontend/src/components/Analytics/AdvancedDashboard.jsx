@@ -34,6 +34,8 @@ import {
   Zap,
   Shield
 } from 'lucide-react'
+import LoadingState from '../common/LoadingState'
+import { getRiskColor } from '../../utils/risk'
 
 const AdvancedDashboard = () => {
   const [healthData, setHealthData] = useState([])
@@ -64,15 +66,6 @@ const AdvancedDashboard = () => {
       setHealthData(sampleHealthData)
     } finally {
       setLoading(false)
-    }
-  }
-
-  const getRiskColor = (riskLevel) => {
-    switch (riskLevel?.toLowerCase()) {
-      case 'normal': return '#48bb78'
-      case 'medium': return '#ed8936'
-      case 'high': return '#f56565'
-      default: return '#718096'
     }
   }
 
@@ -139,17 +132,13 @@ const AdvancedDashboard = () => {
   const riskPieData = Object.entries(riskDistribution).map(([risk, count]) => ({
     name: risk,
     value: count,
-    color: getRiskColor(risk)
+    color: getRiskColor(risk, 'hex')
   }))
 
   const metricStats = getMetricStats()
 
   if (loading) {
-    return (
-      <div className="loading">
-        <div className="pulse">Loading analytics dashboard...</div>
-      </div>
-    )
+    return <LoadingState message="Loading analytics dashboard..." />
   }
 
   return (

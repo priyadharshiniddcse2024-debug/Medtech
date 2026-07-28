@@ -16,97 +16,31 @@ import {
   TestTube,
   Zap
 } from 'lucide-react'
+import {
+  buildHealthRecordPayload,
+  createEmptyHealthForm,
+  readHealthParamsFromUrl,
+  validateHealthForm
+} from '../../utils/healthForm'
+import { getRiskColor, getSeverityColor } from '../../utils/risk'
+import { getRiskIcon } from '../../utils/riskIcons'
+import { useFormState } from '../../hooks/useFormState'
 
 const EnhancedHealthEntry = () => {
-  const [formData, setFormData] = useState({
-    systolic_bp: '',
-    diastolic_bp: '',
-    blood_sugar: '',
-    body_weight: '',
-    hemoglobin: '',
-    heart_rate: '',
-    protein_urine: '',
-    age: '',
-    gestational_week: ''
-  })
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
+  const { formData, setFormData, handleChange } = useFormState(createEmptyHealthForm, () => setError(''))
   
   const navigate = useNavigate()
 
   // Pre-fill form from URL parameters for testing
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search)
-    const newFormData = { ...formData }
-    let hasParams = false
-    
-    Object.keys(formData).forEach(param => {
-      const value = urlParams.get(param)
-      if (value) {
-        newFormData[param] = value
-        hasParams = true
-      }
-    })
-    
-    if (hasParams) {
-      setFormData(newFormData)
+    const urlValues = readHealthParamsFromUrl()
+    if (urlValues) {
+      setFormData(current => ({ ...current, ...urlValues }))
     }
-  }, [])
-
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    })
-    setError('')
-  }
-
-  const validateForm = () => {
-    const { systolic_bp, diastolic_bp, blood_sugar, body_weight, hemoglobin, heart_rate, age, gestational_week } = formData
-    
-    if (parseInt(systolic_bp) < 80 || parseInt(systolic_bp) > 200) {
-      setError('Systolic blood pressure should be between 80-200 mmHg')
-      return false
-    }
-    
-    if (parseInt(diastolic_bp) < 50 || parseInt(diastolic_bp) > 120) {
-      setError('Diastolic blood pressure should be between 50-120 mmHg')
-      return false
-    }
-    
-    if (parseFloat(blood_sugar) < 60 || parseFloat(blood_sugar) > 300) {
-      setError('Blood sugar should be between 60-300 mg/dL')
-      return false
-    }
-    
-    if (parseFloat(body_weight) < 40 || parseFloat(body_weight) > 150) {
-      setError('Body weight should be between 40-150 kg')
-      return false
-    }
-    
-    if (parseFloat(hemoglobin) < 6 || parseFloat(hemoglobin) > 18) {
-      setError('Hemoglobin should be between 6-18 g/dL')
-      return false
-    }
-
-    if (heart_rate && (parseInt(heart_rate) < 50 || parseInt(heart_rate) > 150)) {
-      setError('Heart rate should be between 50-150 bpm')
-      return false
-    }
-
-    if (age && (parseInt(age) < 16 || parseInt(age) > 45)) {
-      setError('Age should be between 16-45 years')
-      return false
-    }
-
-    if (gestational_week && (parseInt(gestational_week) < 1 || parseInt(gestational_week) > 42)) {
-      setError('Gestational week should be between 1-42 weeks')
-      return false
-    }
-    
-    return true
-  }
+  }, [setFormData])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -114,56 +48,21 @@ const EnhancedHealthEntry = () => {
     setError('')
     setResult(null)
 
-    if (!validateForm()) {
+    const validationError = validateHealthForm(formData)
+    if (validationError) {
+      setError(validationError)
       setLoading(false)
       return
     }
 
     try {
-      const response = await axios.post('/health-record', {
-        systolic_bp: parseInt(formData.systolic_bp),
-        diastolic_bp: parseInt(formData.diastolic_bp),
-        blood_sugar: parseFloat(formData.blood_sugar),
-        body_weight: parseFloat(formData.body_weight),
-        hemoglobin: parseFloat(formData.hemoglobin),
-        heart_rate: formData.heart_rate ? parseInt(formData.heart_rate) : 75,
-        protein_urine: formData.protein_urine ? parseFloat(formData.protein_urine) : 0.1,
-        age: formData.age ? parseInt(formData.age) : 28,
-        gestational_week: formData.gestational_week ? parseInt(formData.gestational_week) : 20
-      })
+      const response = await axios.post('/health-record', buildHealthRecordPayload(formData))
       
       setResult(response.data)
     } catch (error) {
       setError(error.response?.data?.message || 'Failed to process health record')
     } finally {
       setLoading(false)
-    }
-  }
-
-  const getRiskColor = (riskLevel) => {
-    switch (riskLevel?.toLowerCase()) {
-      case 'normal': return 'var(--success-color)'
-      case 'medium': return 'var(--warning-color)'
-      case 'high': return 'var(--danger-color)'
-      default: return 'var(--text-secondary)'
-    }
-  }
-
-  const getRiskIcon = (riskLevel) => {
-    switch (riskLevel?.toLowerCase()) {
-      case 'normal': return <CheckCircle size={20} />
-      case 'medium': return <AlertCircle size={20} />
-      case 'high': return <AlertCircle size={20} />
-      default: return <Heart size={20} />
-    }
-  }
-
-  const getConditionSeverityColor = (severity) => {
-    switch (severity?.toLowerCase()) {
-      case 'low': return '#48bb78'
-      case 'moderate': return '#ed8936'
-      case 'high': return '#f56565'
-      default: return '#718096'
     }
   }
 
@@ -223,8 +122,8 @@ const EnhancedHealthEntry = () => {
                       <div 
                         className="severity-badge"
                         style={{ 
-                          backgroundColor: getConditionSeverityColor(condition.severity) + '20',
-                          color: getConditionSeverityColor(condition.severity)
+                          backgroundColor: getSeverityColor(condition.severity) + '20',
+                          color: getSeverityColor(condition.severity)
                         }}
                       >
                         {condition.severity} Risk
@@ -237,7 +136,7 @@ const EnhancedHealthEntry = () => {
                           className="mini-progress-fill"
                           style={{ 
                             width: `${condition.probability * 100}%`,
-                            backgroundColor: getConditionSeverityColor(condition.severity)
+                            backgroundColor: getSeverityColor(condition.severity)
                           }}
                         />
                       </div>
@@ -314,17 +213,7 @@ const EnhancedHealthEntry = () => {
             <button 
               onClick={() => {
                 setResult(null)
-                setFormData({
-                  systolic_bp: '',
-                  diastolic_bp: '',
-                  blood_sugar: '',
-                  body_weight: '',
-                  hemoglobin: '',
-                  heart_rate: '',
-                  protein_urine: '',
-                  age: '',
-                  gestational_week: ''
-                })
+                setFormData(createEmptyHealthForm())
               }}
               className="btn btn-outline"
             >
@@ -694,7 +583,7 @@ const EnhancedHealthEntry = () => {
                     max="5"
                     step="0.1"
                   />
-                  <small className="form-help">Normal: <0.3 g/L</small>
+                  <small className="form-help">Normal: {'<'}0.3 g/L</small>
                 </div>
 
                 <div className="form-group">

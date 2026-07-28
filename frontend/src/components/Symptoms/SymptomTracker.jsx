@@ -15,6 +15,7 @@ import {
   Clock,
   Star
 } from 'lucide-react'
+import { getSeverityColorForScore, getSeverityLabelForScore } from '../../utils/risk'
 
 const SymptomTracker = () => {
   const [symptoms, setSymptoms] = useState([])
@@ -63,18 +64,6 @@ const SymptomTracker = () => {
     } finally {
       setLoading(false)
     }
-  }
-
-  const getSeverityColor = (severity) => {
-    if (severity <= 2) return '#48bb78'
-    if (severity <= 4) return '#ed8936'
-    return '#f56565'
-  }
-
-  const getSeverityLabel = (severity) => {
-    if (severity <= 2) return 'Mild'
-    if (severity <= 4) return 'Moderate'
-    return 'Severe'
   }
 
   return (
@@ -133,7 +122,7 @@ const SymptomTracker = () => {
 
                 <div className="form-group">
                   <label className="form-label">
-                    Severity: {getSeverityLabel(newSymptom.severity)} ({newSymptom.severity}/5)
+                    Severity: {getSeverityLabelForScore(newSymptom.severity)} ({newSymptom.severity}/5)
                   </label>
                   <input
                     type="range"
@@ -143,7 +132,7 @@ const SymptomTracker = () => {
                     onChange={(e) => setNewSymptom({...newSymptom, severity: parseInt(e.target.value)})}
                     className="severity-slider"
                     style={{
-                      background: `linear-gradient(to right, ${getSeverityColor(newSymptom.severity)} 0%, ${getSeverityColor(newSymptom.severity)} ${newSymptom.severity * 20}%, #e2e8f0 ${newSymptom.severity * 20}%, #e2e8f0 100%)`
+                      background: `linear-gradient(to right, ${getSeverityColorForScore(newSymptom.severity)} 0%, ${getSeverityColorForScore(newSymptom.severity)} ${newSymptom.severity * 20}%, #e2e8f0 ${newSymptom.severity * 20}%, #e2e8f0 100%)`
                     }}
                   />
                   <div className="severity-labels">
@@ -224,11 +213,11 @@ const SymptomTracker = () => {
                             <div 
                               className="severity-badge"
                               style={{ 
-                                backgroundColor: getSeverityColor(symptom.severity) + '20',
-                                color: getSeverityColor(symptom.severity)
+                                backgroundColor: getSeverityColorForScore(symptom.severity) + '20',
+                                color: getSeverityColorForScore(symptom.severity)
                               }}
                             >
-                              {getSeverityLabel(symptom.severity)}
+                              {getSeverityLabelForScore(symptom.severity)}
                             </div>
                             <span className="symptom-time">
                               <Clock size={12} />
