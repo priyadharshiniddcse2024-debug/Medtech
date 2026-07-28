@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
-import axios from 'axios'
+import axios, { clearAuthToken, setAuthToken } from '../utils/api'
+import { STORAGE_KEYS, readJSON, removeValues, readValue, writeJSON, writeValue } from '../utils/storage'
 
 const AuthContext = createContext()
 
@@ -11,8 +12,11 @@ export const useAuth = () => {
   return context
 }
 
-// Configure axios defaults
-axios.defaults.baseURL = 'http://localhost:5000/api'
+const persistSession = (token, user) => {
+  writeValue(STORAGE_KEYS.token, token)
+  writeJSON(STORAGE_KEYS.user, user)
+  setAuthToken(token)
+}
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null)
@@ -20,12 +24,11 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     // Check for existing token on app load
-    const token = localStorage.getItem('token')
-    const userData = localStorage.getItem('user')
+    const token = readValue(STORAGE_KEYS.token)
+    const userData = readJSON(STORAGE_KEYS.user)
     
     if (token && userData) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
-      setUser(JSON.parse(userData))
+      setUser(userData)
     }
     
     setLoading(false)
@@ -35,16 +38,10 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await axios.post('/login', { email, password })
       const { token, user_id, name } = response.data
+      const loggedInUser = { id: user_id, name, email }
       
-      // Store token and user data
-      localStorage.setItem('token', token)
-      localStorage.setItem('user', JSON.stringify({ id: user_id, name, email }))
-      
-      // Set axios default header
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
-      
-      // Update user state
-      setUser({ id: user_id, name, email })
+      persistSession(token, loggedInUser)
+      setUser(loggedInUser)
       
       return { success: true }
     } catch (error) {
@@ -59,20 +56,10 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await axios.post('/register', userData)
       const { token, user_id } = response.data
+      const registeredUser = { id: user_id, name: userData.name, email: userData.email }
       
-      // Store token and user data
-      localStorage.setItem('token', token)
-      localStorage.setItem('user', JSON.stringify({ 
-        id: user_id, 
-        name: userData.name, 
-        email: userData.email 
-      }))
-      
-      // Set axios default header
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
-      
-      // Update user state
-      setUser({ id: user_id, name: userData.name, email: userData.email })
+      persistSession(token, registeredUser)
+      setUser(registeredUser)
       
       return { success: true }
     } catch (error) {
@@ -84,9 +71,8 @@ export const AuthProvider = ({ children }) => {
   }
 
   const logout = () => {
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
-    delete axios.defaults.headers.common['Authorization']
+    removeValues(STORAGE_KEYS.token, STORAGE_KEYS.user)
+    clearAuthToken()
     setUser(null)
   }
 

@@ -1,19 +1,28 @@
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import sqlite3
-import hashlib
-import jwt
 import datetime
 from functools import wraps
 import os
 import io
-import json
 from reportlab.lib.pagesizes import letter, A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib import colors
 from ml_model.enhanced_risk_predictor import EnhancedRiskPredictor
+from utils.auth import decode_token, generate_token, hash_password, missing_fields
+from utils.db import execute, get_connection, query_one
+from utils.health_records import (
+    HEALTH_RECORD_FIELDS,
+    MEASUREMENT_FIELDS,
+    REQUIRED_HEALTH_FIELDS,
+    build_health_params,
+    fetch_active_pregnancy_profile,
+    fetch_health_records,
+    insert_health_record
+)
+from utils.pdf import header_table, label_value_table
 from utils.pregnancy_tracker import PregnancyTracker
 from utils.health_recommendations import HealthRecommendations
 
@@ -37,9 +46,12 @@ health_recommendations = HealthRecommendations()
 
 def init_db():
     """Initialize SQLite database with required tables"""
-    conn = sqlite3.connect('maternal_health.db')
-    cursor = conn.cursor()
-    
+    with get_connection() as conn:
+        _create_tables(conn.cursor())
+
+
+def _create_tables(cursor):
+    """Create the application tables and the demo user"""
     # Users table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
@@ -91,14 +103,10 @@ def init_db():
     # Create demo user if it doesn't exist
     cursor.execute('SELECT id FROM users WHERE email = ?', ('demo@maternalcare.ai',))
     if not cursor.fetchone():
-        demo_password_hash = hashlib.sha256('demo123'.encode()).hexdigest()
         cursor.execute('''
             INSERT INTO users (email, password_hash, name, age)
             VALUES (?, ?, ?, ?)
-        ''', ('demo@maternalcare.ai', demo_password_hash, 'Demo User', 28))
-    
-    conn.commit()
-    conn.close()
+        ''', ('demo@maternalcare.ai', hash_password('demo123'), 'Demo User', 28))
 
 def token_required(f):
     """Decorator for JWT token authentication - Modified for demo mode"""
@@ -113,10 +121,8 @@ def token_required(f):
             return f(current_user_id, *args, **kwargs)
         
         try:
-            token = token.split(' ')[1]  # Remove 'Bearer ' prefix
-            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
-            current_user_id = data['user_id']
-        except:
+            current_user_id = decode_token(token, app.config['SECRET_KEY'])
+        except Exception:
             # Fallback to demo user for invalid tokens
             current_user_id = 1
         
@@ -129,31 +135,16 @@ def register():
     data = request.get_json()
     
     # Validate required fields
-    required_fields = ['email', 'password', 'name', 'age']
-    if not all(field in data for field in required_fields):
+    if missing_fields(data, ['email', 'password', 'name', 'age']):
         return jsonify({'message': 'Missing required fields'}), 400
     
-    # Hash password
-    password_hash = hashlib.sha256(data['password'].encode()).hexdigest()
-    
     try:
-        conn = sqlite3.connect('maternal_health.db')
-        cursor = conn.cursor()
-        
-        cursor.execute('''
+        user_id = execute('''
             INSERT INTO users (email, password_hash, name, age)
             VALUES (?, ?, ?, ?)
-        ''', (data['email'], password_hash, data['name'], data['age']))
+        ''', (data['email'], hash_password(data['password']), data['name'], data['age']))
         
-        user_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-        
-        # Generate JWT token
-        token = jwt.encode({
-            'user_id': user_id,
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(days=30)
-        }, app.config['SECRET_KEY'], algorithm='HS256')
+        token = generate_token(user_id, app.config['SECRET_KEY'])
         
         return jsonify({
             'message': 'Registration successful',
@@ -176,25 +167,16 @@ def login():
         print("Missing email or password")
         return jsonify({'message': 'Email and password required'}), 400
     
-    password_hash = hashlib.sha256(data['password'].encode()).hexdigest()
+    password_hash = hash_password(data['password'])
     print(f"Password hash: {password_hash}")
     
-    conn = sqlite3.connect('maternal_health.db')
-    cursor = conn.cursor()
-    
-    cursor.execute('''
+    user = query_one('''
         SELECT id, name FROM users WHERE email = ? AND password_hash = ?
     ''', (data['email'], password_hash))
-    
-    user = cursor.fetchone()
     print(f"User found: {bool(user)}")
-    conn.close()
     
     if user:
-        token = jwt.encode({
-            'user_id': user[0],
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(days=30)
-        }, app.config['SECRET_KEY'], algorithm='HS256')
+        token = generate_token(user[0], app.config['SECRET_KEY'])
         
         return jsonify({
             'message': 'Login successful',
@@ -213,47 +195,15 @@ def add_health_record(current_user_id):
     data = request.get_json()
     
     # Validate required health parameters
-    required_fields = ['systolic_bp', 'diastolic_bp', 'blood_sugar', 'body_weight', 'hemoglobin']
-    if not all(field in data for field in required_fields):
+    if missing_fields(data, REQUIRED_HEALTH_FIELDS):
         return jsonify({'message': 'Missing required health parameters'}), 400
     
-    # Prepare health parameters for AI analysis
-    health_params = {
-        'systolic_bp': data['systolic_bp'],
-        'diastolic_bp': data['diastolic_bp'],
-        'blood_sugar': data['blood_sugar'],
-        'body_weight': data['body_weight'],
-        'hemoglobin': data['hemoglobin'],
-        'heart_rate': data.get('heart_rate', 75),
-        'protein_urine': data.get('protein_urine', 0.1),
-        'age': data.get('age', 28),
-        'gestational_week': data.get('gestational_week', 20)
-    }
+    health_params = build_health_params(data)
     
     # Get comprehensive AI prediction
     ai_results = risk_predictor.predict_comprehensive(health_params)
     
-    # Store health record with comprehensive data
-    conn = sqlite3.connect('maternal_health.db')
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        INSERT INTO health_records 
-        (user_id, systolic_bp, diastolic_bp, blood_sugar, body_weight, hemoglobin,
-         heart_rate, protein_urine, age, gestational_week, risk_level, 
-         detected_conditions, condition_details)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (current_user_id, 
-          data['systolic_bp'], data['diastolic_bp'], data['blood_sugar'], 
-          data['body_weight'], data['hemoglobin'], health_params['heart_rate'],
-          health_params['protein_urine'], health_params['age'], 
-          health_params['gestational_week'], ai_results['risk_level'],
-          json.dumps(ai_results['detected_conditions']),
-          json.dumps(ai_results['condition_details'])))
-    
-    record_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
+    record_id = insert_health_record(current_user_id, health_params, ai_results)
     
     # Generate enhanced recommendations
     recommendations = health_recommendations.get_recommendations(
@@ -283,23 +233,16 @@ def create_pregnancy_profile(current_user_id):
     # Calculate expected due date and current week
     profile_data = pregnancy_tracker.create_profile(data['last_menstrual_period'])
     
-    conn = sqlite3.connect('maternal_health.db')
-    cursor = conn.cursor()
-    
     # Deactivate existing profiles
-    cursor.execute('UPDATE pregnancy_profiles SET is_active = FALSE WHERE user_id = ?', (current_user_id,))
+    execute('UPDATE pregnancy_profiles SET is_active = FALSE WHERE user_id = ?', (current_user_id,))
     
     # Create new profile
-    cursor.execute('''
+    profile_id = execute('''
         INSERT INTO pregnancy_profiles 
         (user_id, last_menstrual_period, expected_due_date, current_week)
         VALUES (?, ?, ?, ?)
     ''', (current_user_id, data['last_menstrual_period'], 
           profile_data['expected_due_date'], profile_data['current_week']))
-    
-    profile_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
     
     return jsonify({
         'profile_id': profile_id,
@@ -319,97 +262,38 @@ def get_pregnancy_guidance(current_user_id, week):
 @token_required
 def get_dashboard_data(current_user_id):
     """Get dashboard data including recent records and pregnancy info"""
-    conn = sqlite3.connect('maternal_health.db')
-    cursor = conn.cursor()
-    
-    # Get recent health records
-    cursor.execute('''
-        SELECT systolic_bp, diastolic_bp, blood_sugar, body_weight, 
-               hemoglobin, risk_level, recorded_at
-        FROM health_records 
-        WHERE user_id = ? 
-        ORDER BY recorded_at DESC 
-        LIMIT 5
-    ''', (current_user_id,))
-    
-    recent_records = cursor.fetchall()
-    
-    # Get active pregnancy profile
-    cursor.execute('''
-        SELECT current_week, expected_due_date, last_menstrual_period
-        FROM pregnancy_profiles 
-        WHERE user_id = ? AND is_active = TRUE
-        ORDER BY created_at DESC 
-        LIMIT 1
-    ''', (current_user_id,))
-    
-    pregnancy_profile = cursor.fetchone()
-    conn.close()
-    
     dashboard_data = {
-        'recent_records': [
-            {
-                'systolic_bp': record[0],
-                'diastolic_bp': record[1],
-                'blood_sugar': record[2],
-                'body_weight': record[3],
-                'hemoglobin': record[4],
-                'risk_level': record[5],
-                'recorded_at': record[6]
-            } for record in recent_records
-        ],
-        'pregnancy_profile': {
-            'current_week': pregnancy_profile[0] if pregnancy_profile else None,
-            'expected_due_date': pregnancy_profile[1] if pregnancy_profile else None,
-            'last_menstrual_period': pregnancy_profile[2] if pregnancy_profile else None
-        } if pregnancy_profile else None
+        'recent_records': fetch_health_records(current_user_id, limit=5),
+        'pregnancy_profile': fetch_active_pregnancy_profile(current_user_id)
     }
     
     return jsonify(dashboard_data), 200
+
+def sample_report_records():
+    """Demo records used when a user has no health history yet"""
+    now = datetime.datetime.now()
+    return [
+        dict(zip(HEALTH_RECORD_FIELDS, row)) for row in [
+            (120, 80, 95, 65.5, 12.1, 'Normal', now.isoformat()),
+            (125, 85, 110, 66.2, 11.8, 'Medium', (now - datetime.timedelta(days=7)).isoformat()),
+            (118, 78, 88, 65.0, 12.3, 'Normal', (now - datetime.timedelta(days=14)).isoformat()),
+        ]
+    ]
 
 @app.route('/api/generate-report', methods=['GET'])
 @token_required
 def generate_health_report(current_user_id):
     """Generate comprehensive health report PDF"""
     try:
-        conn = sqlite3.connect('maternal_health.db')
-        cursor = conn.cursor()
+        user_info = query_one('SELECT name, email FROM users WHERE id = ?', (current_user_id,))
         
-        # Get user info
-        cursor.execute('SELECT name, email FROM users WHERE id = ?', (current_user_id,))
-        user_info = cursor.fetchone()
-        
-        # Get all health records
-        cursor.execute('''
-            SELECT systolic_bp, diastolic_bp, blood_sugar, body_weight, 
-                   hemoglobin, risk_level, recorded_at
-            FROM health_records 
-            WHERE user_id = ? 
-            ORDER BY recorded_at DESC
-        ''', (current_user_id,))
-        
-        health_records = cursor.fetchall()
+        health_records = fetch_health_records(current_user_id)
         
         # If no records exist, create some sample data for demo
         if not health_records:
-            sample_records = [
-                (120, 80, 95, 65.5, 12.1, 'Normal', datetime.datetime.now().isoformat()),
-                (125, 85, 110, 66.2, 11.8, 'Medium', (datetime.datetime.now() - datetime.timedelta(days=7)).isoformat()),
-                (118, 78, 88, 65.0, 12.3, 'Normal', (datetime.datetime.now() - datetime.timedelta(days=14)).isoformat()),
-            ]
-            health_records = sample_records
+            health_records = sample_report_records()
         
-        # Get pregnancy profile
-        cursor.execute('''
-            SELECT current_week, expected_due_date, last_menstrual_period
-            FROM pregnancy_profiles 
-            WHERE user_id = ? AND is_active = TRUE
-            ORDER BY created_at DESC 
-            LIMIT 1
-        ''', (current_user_id,))
-        
-        pregnancy_profile = cursor.fetchone()
-        conn.close()
+        pregnancy_profile = fetch_active_pregnancy_profile(current_user_id)
         
         # Create PDF report
         buffer = io.BytesIO()
@@ -439,21 +323,12 @@ def generate_health_report(current_user_id):
         
         if pregnancy_profile:
             patient_data.extend([
-                ['Current Week:', f"Week {pregnancy_profile[0]}"],
-                ['Expected Due Date:', pregnancy_profile[1]],
-                ['Last Menstrual Period:', pregnancy_profile[2]]
+                ['Current Week:', f"Week {pregnancy_profile['current_week']}"],
+                ['Expected Due Date:', pregnancy_profile['expected_due_date']],
+                ['Last Menstrual Period:', pregnancy_profile['last_menstrual_period']]
             ])
         
-        patient_table = Table(patient_data, colWidths=[2*inch, 4*inch])
-        patient_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#f7fafc')),
-            ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 10),
-            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#e2e8f0'))
-        ]))
-        story.append(patient_table)
+        story.append(label_value_table(patient_data, col_widths=[2*inch, 4*inch]))
         story.append(Spacer(1, 20))
         
         # Health Records Summary
@@ -462,29 +337,25 @@ def generate_health_report(current_user_id):
             
             # Latest record
             latest = health_records[0]
-            story.append(Paragraph(f"<b>Latest Assessment ({datetime.datetime.fromisoformat(latest[6]).strftime('%B %d, %Y')}):</b>", styles['Normal']))
+            recorded_at = datetime.datetime.fromisoformat(latest['recorded_at'])
+            story.append(Paragraph(f"<b>Latest Assessment ({recorded_at.strftime('%B %d, %Y')}):</b>", styles['Normal']))
             
             latest_data = [
                 ['Parameter', 'Value', 'Status'],
-                ['Systolic Blood Pressure', f"{latest[0]} mmHg", 'Normal' if latest[0] < 140 else 'Elevated'],
-                ['Diastolic Blood Pressure', f"{latest[1]} mmHg", 'Normal' if latest[1] < 90 else 'Elevated'],
-                ['Blood Sugar', f"{latest[2]} mg/dL", 'Normal' if latest[2] < 125 else 'Elevated'],
-                ['Body Weight', f"{latest[3]} kg", 'Monitored'],
-                ['Hemoglobin', f"{latest[4]} g/dL", 'Normal' if latest[4] >= 11 else 'Low'],
-                ['Risk Level', latest[5], latest[5]]
+                ['Systolic Blood Pressure', f"{latest['systolic_bp']} mmHg", 'Normal' if latest['systolic_bp'] < 140 else 'Elevated'],
+                ['Diastolic Blood Pressure', f"{latest['diastolic_bp']} mmHg", 'Normal' if latest['diastolic_bp'] < 90 else 'Elevated'],
+                ['Blood Sugar', f"{latest['blood_sugar']} mg/dL", 'Normal' if latest['blood_sugar'] < 125 else 'Elevated'],
+                ['Body Weight', f"{latest['body_weight']} kg", 'Monitored'],
+                ['Hemoglobin', f"{latest['hemoglobin']} g/dL", 'Normal' if latest['hemoglobin'] >= 11 else 'Low'],
+                ['Risk Level', latest['risk_level'], latest['risk_level']]
             ]
             
-            health_table = Table(latest_data, colWidths=[2.5*inch, 1.5*inch, 1.5*inch])
-            health_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#667eea')),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, -1), 9),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f7fafc')])
-            ]))
-            story.append(health_table)
+            story.append(header_table(
+                latest_data,
+                header_color='#667eea',
+                col_widths=[2.5*inch, 1.5*inch, 1.5*inch],
+                striped=True
+            ))
             story.append(Spacer(1, 20))
             
             # Trends
@@ -496,36 +367,21 @@ def generate_health_report(current_user_id):
                 previous = health_records[1]
                 
                 trends = []
-                parameters = ['Systolic BP', 'Diastolic BP', 'Blood Sugar', 'Weight', 'Hemoglobin']
-                for i, param in enumerate(parameters):
-                    change = current[i] - previous[i]
+                labels = ['Systolic BP', 'Diastolic BP', 'Blood Sugar', 'Weight', 'Hemoglobin']
+                for field, label in zip(MEASUREMENT_FIELDS, labels):
+                    change = current[field] - previous[field]
                     trend = "↑" if change > 0 else "↓" if change < 0 else "→"
-                    trends.append([param, f"{change:+.1f}", trend])
+                    trends.append([label, f"{change:+.1f}", trend])
                 
-                trend_table = Table([['Parameter', 'Change', 'Trend']] + trends)
-                trend_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#48bb78')),
-                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, 0), (-1, -1), 9),
-                    ('GRID', (0, 0), (-1, -1), 1, colors.black)
-                ]))
-                story.append(trend_table)
+                story.append(header_table([['Parameter', 'Change', 'Trend']] + trends, header_color='#48bb78'))
                 story.append(Spacer(1, 20))
         
         # Recommendations
         if health_records:
             latest_record = health_records[0]
-            health_params = {
-                'systolic_bp': latest_record[0],
-                'diastolic_bp': latest_record[1],
-                'blood_sugar': latest_record[2],
-                'body_weight': latest_record[3],
-                'hemoglobin': latest_record[4]
-            }
+            health_params = {field: latest_record[field] for field in MEASUREMENT_FIELDS}
             
-            recommendations = health_recommendations.get_recommendations(latest_record[5], health_params)
+            recommendations = health_recommendations.get_recommendations(latest_record['risk_level'], health_params)
             
             story.append(Paragraph("AI-Generated Recommendations", styles['Heading2']))
             

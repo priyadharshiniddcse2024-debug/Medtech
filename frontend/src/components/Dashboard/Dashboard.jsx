@@ -6,7 +6,6 @@ import {
   Baby, 
   Calendar, 
   TrendingUp, 
-  AlertTriangle,
   Heart,
   Plus,
   Clock,
@@ -14,6 +13,9 @@ import {
   FileText
 } from 'lucide-react'
 import { format } from 'date-fns'
+import LoadingState from '../common/LoadingState'
+import { getRiskColor } from '../../utils/risk'
+import { getRiskIcon } from '../../utils/riskIcons'
 
 const Dashboard = () => {
   const [dashboardData, setDashboardData] = useState(null)
@@ -85,28 +87,8 @@ const Dashboard = () => {
     }
   }
 
-  const getRiskColor = (riskLevel) => {
-    switch (riskLevel?.toLowerCase()) {
-      case 'normal': return 'var(--success-color)'
-      case 'medium': return 'var(--warning-color)'
-      case 'high': return 'var(--danger-color)'
-      default: return 'var(--text-secondary)'
-    }
-  }
-
-  const getRiskIcon = (riskLevel) => {
-    switch (riskLevel?.toLowerCase()) {
-      case 'high': return <AlertTriangle size={16} />
-      default: return <Heart size={16} />
-    }
-  }
-
   if (loading) {
-    return (
-      <div className="loading">
-        <div className="pulse">Loading your health dashboard...</div>
-      </div>
-    )
+    return <LoadingState message="Loading your health dashboard..." />
   }
 
   if (error) {
@@ -203,7 +185,7 @@ const Dashboard = () => {
                   border: `1px solid ${getRiskColor(latestRecord.risk_level)}30`
                 }}
               >
-                {getRiskIcon(latestRecord.risk_level)}
+                {getRiskIcon(latestRecord.risk_level, 16)}
                 {latestRecord.risk_level} Risk
               </div>
               <span className="record-date">

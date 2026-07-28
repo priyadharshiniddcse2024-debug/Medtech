@@ -13,16 +13,18 @@ import {
   Clock
 } from 'lucide-react'
 import { format, addDays } from 'date-fns'
+import LoadingState from '../common/LoadingState'
+import { useFormState } from '../../hooks/useFormState'
 
 const PregnancyTracker = () => {
   const [pregnancyProfile, setPregnancyProfile] = useState(null)
   const [weeklyGuidance, setWeeklyGuidance] = useState(null)
   const [showProfileForm, setShowProfileForm] = useState(false)
-  const [formData, setFormData] = useState({
-    last_menstrual_period: ''
-  })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const { formData, handleChange } = useFormState({
+    last_menstrual_period: ''
+  }, () => setError(''))
 
   useEffect(() => {
     fetchDashboardData()
@@ -73,14 +75,6 @@ const PregnancyTracker = () => {
     }
   }
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    })
-    setError('')
-  }
-
   const getWeekDescription = (week) => {
     if (week <= 12) return "First Trimester"
     if (week <= 28) return "Second Trimester"
@@ -92,11 +86,7 @@ const PregnancyTracker = () => {
   }
 
   if (loading) {
-    return (
-      <div className="loading">
-        <div className="pulse">Loading pregnancy tracker...</div>
-      </div>
-    )
+    return <LoadingState message="Loading pregnancy tracker..." />
   }
 
   if (showProfileForm) {
