@@ -52,6 +52,7 @@ const PregnancyTracker = () => {
       setWeeklyGuidance(response.data)
     } catch (error) {
       console.error('Failed to load weekly guidance:', error)
+      setError(error.response?.data?.message || 'Failed to load weekly guidance')
     }
   }
 

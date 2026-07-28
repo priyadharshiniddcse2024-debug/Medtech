@@ -8,6 +8,7 @@ from functools import wraps
 import os
 import io
 import json
+import logging
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -21,23 +22,27 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'maternal-health-secret-key-2024')
 CORS(app)
 
+logging.basicConfig(level=logging.INFO)
+
+DB_PATH = 'maternal_health.db'
+
 # Initialize enhanced ML model and utilities
 try:
     risk_predictor = EnhancedRiskPredictor()
-    print("Enhanced Risk Predictor initialized successfully!")
-except Exception as e:
-    print(f"Error initializing Enhanced Risk Predictor: {e}")
+    app.logger.info("Enhanced Risk Predictor initialized successfully!")
+except Exception:
+    app.logger.exception("Error initializing Enhanced Risk Predictor; falling back to basic predictor")
     # Fallback to basic predictor if needed
     from ml_model.risk_predictor import RiskPredictor
     risk_predictor = RiskPredictor()
-    print("Fallback to basic Risk Predictor")
+    app.logger.info("Fallback to basic Risk Predictor")
 
 pregnancy_tracker = PregnancyTracker()
 health_recommendations = HealthRecommendations()
 
 def init_db():
     """Initialize SQLite database with required tables"""
-    conn = sqlite3.connect('maternal_health.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     # Users table
@@ -116,8 +121,9 @@ def token_required(f):
             token = token.split(' ')[1]  # Remove 'Bearer ' prefix
             data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
             current_user_id = data['user_id']
-        except:
-            # Fallback to demo user for invalid tokens
+        except (jwt.PyJWTError, IndexError, KeyError) as e:
+            # Fallback to demo user for invalid tokens (demo mode), but log why.
+            app.logger.warning(f"Invalid/expired token, falling back to demo user: {e}")
             current_user_id = 1
         
         return f(current_user_id, *args, **kwargs)
@@ -126,7 +132,9 @@ def token_required(f):
 @app.route('/api/register', methods=['POST'])
 def register():
     """User registration endpoint"""
-    data = request.get_json()
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'message': 'Invalid or missing JSON body'}), 400
     
     # Validate required fields
     required_fields = ['email', 'password', 'name', 'age']
@@ -136,8 +144,9 @@ def register():
     # Hash password
     password_hash = hashlib.sha256(data['password'].encode()).hexdigest()
     
+    conn = None
     try:
-        conn = sqlite3.connect('maternal_health.db')
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
         cursor.execute('''
@@ -147,7 +156,6 @@ def register():
         
         user_id = cursor.lastrowid
         conn.commit()
-        conn.close()
         
         # Generate JWT token
         token = jwt.encode({
@@ -163,32 +171,41 @@ def register():
         
     except sqlite3.IntegrityError:
         return jsonify({'message': 'Email already exists'}), 409
-    except Exception as e:
+    except Exception:
+        app.logger.exception("Registration failed")
         return jsonify({'message': 'Registration failed'}), 500
+    finally:
+        if conn is not None:
+            conn.close()
 
 @app.route('/api/login', methods=['POST'])
 def login():
     """User login endpoint"""
-    data = request.get_json()
-    print(f"Login attempt - Email: {data.get('email')}, Password provided: {bool(data.get('password'))}")
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'message': 'Invalid or missing JSON body'}), 400
     
     if not data.get('email') or not data.get('password'):
-        print("Missing email or password")
         return jsonify({'message': 'Email and password required'}), 400
     
     password_hash = hashlib.sha256(data['password'].encode()).hexdigest()
-    print(f"Password hash: {password_hash}")
     
-    conn = sqlite3.connect('maternal_health.db')
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        SELECT id, name FROM users WHERE email = ? AND password_hash = ?
-    ''', (data['email'], password_hash))
-    
-    user = cursor.fetchone()
-    print(f"User found: {bool(user)}")
-    conn.close()
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT id, name FROM users WHERE email = ? AND password_hash = ?
+        ''', (data['email'], password_hash))
+        
+        user = cursor.fetchone()
+    except Exception:
+        app.logger.exception("Login failed while querying user")
+        return jsonify({'message': 'Login failed'}), 500
+    finally:
+        if conn is not None:
+            conn.close()
     
     if user:
         token = jwt.encode({
@@ -203,14 +220,15 @@ def login():
             'name': user[1]
         }), 200
     else:
-        print("Invalid credentials")
         return jsonify({'message': 'Invalid credentials'}), 401
 
 @app.route('/api/health-record', methods=['POST'])
 @token_required
 def add_health_record(current_user_id):
     """Add new health record and get comprehensive AI analysis"""
-    data = request.get_json()
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'message': 'Invalid or missing JSON body'}), 400
     
     # Validate required health parameters
     required_fields = ['systolic_bp', 'diastolic_bp', 'blood_sugar', 'body_weight', 'hemoglobin']
@@ -231,29 +249,40 @@ def add_health_record(current_user_id):
     }
     
     # Get comprehensive AI prediction
-    ai_results = risk_predictor.predict_comprehensive(health_params)
+    try:
+        ai_results = risk_predictor.predict_comprehensive(health_params)
+    except Exception:
+        app.logger.exception("AI risk prediction failed")
+        return jsonify({'message': 'Failed to analyze health parameters'}), 500
     
     # Store health record with comprehensive data
-    conn = sqlite3.connect('maternal_health.db')
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        INSERT INTO health_records 
-        (user_id, systolic_bp, diastolic_bp, blood_sugar, body_weight, hemoglobin,
-         heart_rate, protein_urine, age, gestational_week, risk_level, 
-         detected_conditions, condition_details)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (current_user_id, 
-          data['systolic_bp'], data['diastolic_bp'], data['blood_sugar'], 
-          data['body_weight'], data['hemoglobin'], health_params['heart_rate'],
-          health_params['protein_urine'], health_params['age'], 
-          health_params['gestational_week'], ai_results['risk_level'],
-          json.dumps(ai_results['detected_conditions']),
-          json.dumps(ai_results['condition_details'])))
-    
-    record_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT INTO health_records 
+            (user_id, systolic_bp, diastolic_bp, blood_sugar, body_weight, hemoglobin,
+             heart_rate, protein_urine, age, gestational_week, risk_level, 
+             detected_conditions, condition_details)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (current_user_id, 
+              data['systolic_bp'], data['diastolic_bp'], data['blood_sugar'], 
+              data['body_weight'], data['hemoglobin'], health_params['heart_rate'],
+              health_params['protein_urine'], health_params['age'], 
+              health_params['gestational_week'], ai_results['risk_level'],
+              json.dumps(ai_results['detected_conditions']),
+              json.dumps(ai_results['condition_details'])))
+        
+        record_id = cursor.lastrowid
+        conn.commit()
+    except Exception:
+        app.logger.exception("Failed to store health record")
+        return jsonify({'message': 'Failed to store health record'}), 500
+    finally:
+        if conn is not None:
+            conn.close()
     
     # Generate enhanced recommendations
     recommendations = health_recommendations.get_recommendations(
@@ -275,31 +304,43 @@ def add_health_record(current_user_id):
 @token_required
 def create_pregnancy_profile(current_user_id):
     """Create or update pregnancy profile"""
-    data = request.get_json()
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'message': 'Invalid or missing JSON body'}), 400
     
     if not data.get('last_menstrual_period'):
         return jsonify({'message': 'Last menstrual period date required'}), 400
     
     # Calculate expected due date and current week
-    profile_data = pregnancy_tracker.create_profile(data['last_menstrual_period'])
+    try:
+        profile_data = pregnancy_tracker.create_profile(data['last_menstrual_period'])
+    except (ValueError, TypeError):
+        return jsonify({'message': 'Invalid last_menstrual_period; expected YYYY-MM-DD'}), 400
     
-    conn = sqlite3.connect('maternal_health.db')
-    cursor = conn.cursor()
-    
-    # Deactivate existing profiles
-    cursor.execute('UPDATE pregnancy_profiles SET is_active = FALSE WHERE user_id = ?', (current_user_id,))
-    
-    # Create new profile
-    cursor.execute('''
-        INSERT INTO pregnancy_profiles 
-        (user_id, last_menstrual_period, expected_due_date, current_week)
-        VALUES (?, ?, ?, ?)
-    ''', (current_user_id, data['last_menstrual_period'], 
-          profile_data['expected_due_date'], profile_data['current_week']))
-    
-    profile_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Deactivate existing profiles
+        cursor.execute('UPDATE pregnancy_profiles SET is_active = FALSE WHERE user_id = ?', (current_user_id,))
+        
+        # Create new profile
+        cursor.execute('''
+            INSERT INTO pregnancy_profiles 
+            (user_id, last_menstrual_period, expected_due_date, current_week)
+            VALUES (?, ?, ?, ?)
+        ''', (current_user_id, data['last_menstrual_period'], 
+              profile_data['expected_due_date'], profile_data['current_week']))
+        
+        profile_id = cursor.lastrowid
+        conn.commit()
+    except Exception:
+        app.logger.exception("Failed to create pregnancy profile")
+        return jsonify({'message': 'Failed to create pregnancy profile'}), 500
+    finally:
+        if conn is not None:
+            conn.close()
     
     return jsonify({
         'profile_id': profile_id,
@@ -313,38 +354,47 @@ def create_pregnancy_profile(current_user_id):
 def get_pregnancy_guidance(current_user_id, week):
     """Get week-specific pregnancy guidance"""
     guidance = pregnancy_tracker.get_weekly_guidance(week)
+    if isinstance(guidance, dict) and 'error' in guidance:
+        return jsonify(guidance), 400
     return jsonify(guidance), 200
 
 @app.route('/api/dashboard', methods=['GET'])
 @token_required
 def get_dashboard_data(current_user_id):
     """Get dashboard data including recent records and pregnancy info"""
-    conn = sqlite3.connect('maternal_health.db')
-    cursor = conn.cursor()
-    
-    # Get recent health records
-    cursor.execute('''
-        SELECT systolic_bp, diastolic_bp, blood_sugar, body_weight, 
-               hemoglobin, risk_level, recorded_at
-        FROM health_records 
-        WHERE user_id = ? 
-        ORDER BY recorded_at DESC 
-        LIMIT 5
-    ''', (current_user_id,))
-    
-    recent_records = cursor.fetchall()
-    
-    # Get active pregnancy profile
-    cursor.execute('''
-        SELECT current_week, expected_due_date, last_menstrual_period
-        FROM pregnancy_profiles 
-        WHERE user_id = ? AND is_active = TRUE
-        ORDER BY created_at DESC 
-        LIMIT 1
-    ''', (current_user_id,))
-    
-    pregnancy_profile = cursor.fetchone()
-    conn.close()
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Get recent health records
+        cursor.execute('''
+            SELECT systolic_bp, diastolic_bp, blood_sugar, body_weight, 
+                   hemoglobin, risk_level, recorded_at
+            FROM health_records 
+            WHERE user_id = ? 
+            ORDER BY recorded_at DESC 
+            LIMIT 5
+        ''', (current_user_id,))
+        
+        recent_records = cursor.fetchall()
+        
+        # Get active pregnancy profile
+        cursor.execute('''
+            SELECT current_week, expected_due_date, last_menstrual_period
+            FROM pregnancy_profiles 
+            WHERE user_id = ? AND is_active = TRUE
+            ORDER BY created_at DESC 
+            LIMIT 1
+        ''', (current_user_id,))
+        
+        pregnancy_profile = cursor.fetchone()
+    except Exception:
+        app.logger.exception("Failed to load dashboard data")
+        return jsonify({'message': 'Failed to load dashboard data'}), 500
+    finally:
+        if conn is not None:
+            conn.close()
     
     dashboard_data = {
         'recent_records': [
@@ -371,8 +421,9 @@ def get_dashboard_data(current_user_id):
 @token_required
 def generate_health_report(current_user_id):
     """Generate comprehensive health report PDF"""
+    conn = None
     try:
-        conn = sqlite3.connect('maternal_health.db')
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
         # Get user info
@@ -410,6 +461,7 @@ def generate_health_report(current_user_id):
         
         pregnancy_profile = cursor.fetchone()
         conn.close()
+        conn = None
         
         # Create PDF report
         buffer = io.BytesIO()
@@ -566,14 +618,20 @@ def generate_health_report(current_user_id):
         
         return response
         
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    except Exception:
+        app.logger.exception("Failed to generate health report")
+        return jsonify({'error': 'Failed to generate health report'}), 500
+    finally:
+        if conn is not None:
+            conn.close()
 
 @app.route('/api/emergency-call', methods=['POST'])
 @token_required
 def initiate_emergency_call(current_user_id):
     """Log emergency call attempt and return call information"""
-    data = request.get_json()
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'message': 'Invalid or missing JSON body'}), 400
     
     call_log = {
         'user_id': current_user_id,
